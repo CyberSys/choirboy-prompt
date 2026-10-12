@@ -19,7 +19,7 @@ Report only the evidence that is present:
 - the next corrective action.
 
 If no valid marker is present, explain that registration or hook execution is
-not proven and ask the user to invoke `/choirboy-prompt:load-context` in Claude
-Code. In Claude Chat or Cowork, tell the user to select the **load-context** skill
-or ask Claude to “load Choirboy context”. Do not recommend clearing Claude
-memory until delivery has first been proven.
+not proven. In Claude Code, ask the agent to read `skills/load-context/SKILL.md`
+from the repository checkout. In Claude Chat or Cowork, tell the user to select
+the **load-context** skill or ask Claude to “load Choirboy context”. Do not
+recommend clearing Claude memory until delivery has first been proven.

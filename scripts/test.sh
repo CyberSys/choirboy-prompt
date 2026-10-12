@@ -144,13 +144,10 @@ import json
 from pathlib import Path
 
 plugin = json.loads(Path(".claude-plugin/plugin.json").read_text(encoding="utf-8"))
-market = json.loads(Path(".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
 hooks = json.loads(Path("hooks/hooks.json").read_text(encoding="utf-8"))
-entry = market["plugins"][0]
 handler = hooks["hooks"]["SessionStart"][0]["hooks"][0]
 stop_handler = hooks["hooks"]["Stop"][0]["hooks"][0]
-assert plugin["name"] == entry["name"] == "choirboy-prompt"
-assert plugin["version"] == entry["version"]
+assert plugin["name"] == "choirboy-prompt"
 assert handler["command"] == "bash"
 assert handler["args"] == ["${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"]
 assert handler["timeout"] == 15
@@ -162,9 +159,6 @@ assert stop_handler == {
 }
 PY
 pass "manifests and lifecycle hooks"
-
-claude plugin validate . >/dev/null
-pass "Claude plugin validator"
 
 python3 scripts/artifact-generator.py prepare --json > "$TEST_ROOT/artifact-pending.json"
 python3 scripts/artifact-generator.py session-context > "$TEST_ROOT/artifact-pending.txt"
@@ -715,28 +709,6 @@ if [ -L "$symlink_root/projects" ]; then
 fi
 pass "retirement cannot follow a projects-directory symlink"
 
-market_config="$TEST_ROOT/claude-config"
-CLAUDE_CONFIG_DIR="$market_config" claude plugin marketplace add "$ROOT" >/dev/null
-CLAUDE_CONFIG_DIR="$market_config" \
-  claude plugin install choirboy-prompt@choirboy-prompt >/dev/null
-CLAUDE_CONFIG_DIR="$market_config" claude plugin list --json > "$TEST_ROOT/plugins.json"
-python3 - "$TEST_ROOT/plugins.json" "$VERSION" <<'PY'
-import json, sys
-from pathlib import Path
-
-plugins = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-plugin = next(item for item in plugins if item["id"] == "choirboy-prompt@choirboy-prompt")
-assert plugin["version"] == sys.argv[2]
-assert plugin["enabled"] is True
-install = Path(plugin["installPath"])
-assert (install / "hooks/hooks.json").is_file()
-assert (install / "hooks/artifact-stop.sh").is_file()
-assert (install / "scripts/artifact-generator.py").is_file()
-assert (install / "skills/load-context/SKILL.md").is_file()
-assert (install / "skills/diagnose/SKILL.md").is_file()
-PY
-pass "isolated marketplace install"
-
 CLAUDE_PLUGIN_DATA="$TEST_ROOT/plugin-data" \
   bash hooks/session-start.sh --format claude > "$TEST_ROOT/claude.json"
 python3 - "$TEST_ROOT/claude.json" "$VERSION" <<'PY'
@@ -778,7 +750,7 @@ assert "<choirboy-context>" not in context
 assert len(context) < 2000
 assert (root / ".artifact-request.json").is_file()
 PY
-pass "CLAUDE_PLUGIN_DATA owns marketplace artifact state"
+pass "CLAUDE_PLUGIN_DATA owns custom-plugin artifact state"
 
 env -u CHOIRBOY_ARTIFACTS_DIR -u CLAUDE_PLUGIN_DATA \
   XDG_DATA_HOME="$TEST_ROOT/xdg-data" HOME="$TEST_ROOT/root-precedence-home" \
@@ -1559,7 +1531,6 @@ import stat, sys, zipfile
 
 required = {
     ".claude-plugin/plugin.json",
-    ".claude-plugin/marketplace.json",
     "hooks/hooks.json",
     "hooks/artifact-stop.sh",
     "hooks/kimi-artifact-stop.sh",

@@ -7,22 +7,24 @@ Claude acknowledgement is not evidence that `SessionStart` ran.
 
 | Surface | Install | Primary delivery | Fallback / limit |
 |---|---|---|---|
-| Claude Code CLI | `/plugin` marketplace | automatic `SessionStart` | `/choirboy-prompt:load-context` |
-| Desktop Code local | graphical Plugin Manager | automatic `SessionStart` | load-context skill |
+| Claude Code CLI | `install.sh --target claude` or `install.ps1 --target claude` | automatic `SessionStart` status | ask the agent to read local `skills/load-context/SKILL.md` |
+| Desktop Code local | direct hooks in `settings.json` | automatic `SessionStart` status | ask the agent to read local `skills/load-context/SKILL.md` |
 | Claude Chat | custom plugin | load-context skill | Chat does not execute hooks |
 | Claude Cowork | custom plugin | hook where available | load-context skill; hook runtime may drop output |
-| Desktop Code SSH | graphical Plugin Manager | hook when synchronized | current SSH sync can omit `hooks/` |
-| Desktop Code Cloud | project plugin settings | automatic hook | local Desktop plugins are not inherited |
-| Desktop Code WSL | — | — | Desktop plugins are unavailable |
+| Desktop Code SSH / Cloud / WSL | register hooks in the execution environment | `SessionStart` status when hooks are supported | the checkout and hook runtime must be available there |
 
 ## Four-stage diagnosis
 
-1. **Registration:** the plugin manager shows `choirboy-prompt` enabled at the
-   current version.
-2. **Execution:** a marketplace hook creates
-   `${CLAUDE_PLUGIN_DATA}/latest-delivery.log` with version, hash, and nonce.
-3. **Delivery:** `/choirboy-prompt:diagnose` finds a `choirboy-delivery` marker
-   next to `choirboy-context`.
+1. **Registration:** `./install.sh --list` reports Claude as `installed`, and the
+   relevant `settings.json` points to the current checkout. For Chat/Cowork,
+   check that the custom plugin is enabled.
+2. **Execution:** the session receives the short “Choirboy memory status”.
+   When the host sets `CLAUDE_PLUGIN_DATA`, the Bash hook also records version,
+   hash, and nonce in `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`.
+3. **Delivery:** ask the Claude Code agent to read local
+   `skills/load-context/SKILL.md`, then `skills/diagnose/SKILL.md` to inspect
+   the `choirboy-delivery` marker next to `choirboy-context`. In Chat/Cowork,
+   select the **load-context** and **diagnose** skills.
 4. **Behavior:** only after the first three stages pass should model acceptance,
    conflicting instructions, or memory be investigated.
 
@@ -33,16 +35,28 @@ Marker delivery values:
 
 ## Common failures
 
-### `/plugin` is unavailable in Desktop
+### Claude Code receives no status
 
-Expected: Desktop does not expose the terminal plugin dialog. Add the repository
-under **Customize → Plugins → Personal plugins → + → Add marketplace**, then use
-**Code → + → Plugins → Add plugin**.
+Register the hooks from the repository checkout:
+
+```bash
+./install.sh --target claude
+```
+
+On Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 --target claude
+```
+
+Start a new session. If the checkout moved, run the installer again from its new
+location. Use `--settings` or `--project` when the session reads a different
+settings file; see [Installer](installer.en.md).
 
 ### Plugin is installed in Chat but nothing changes
 
-Expected for a hook-only workflow: Chat does not execute `SessionStart`. Select
-the **load-context** skill or ask Claude to load Choirboy context.
+Chat does not execute `SessionStart`. Select the **load-context** skill or ask
+Claude to load Choirboy context.
 
 ### Cowork shows the plugin but no marker
 
@@ -51,8 +65,9 @@ current builds; the skill is the supported fallback.
 
 ### Windows hook error
 
-The plugin uses exec form so `${CLAUDE_PLUGIN_ROOT}` is a single argument, but
-automatic delivery still needs `bash` on `PATH`. Install Git for Windows or use
+Manual installation uses PowerShell hooks and needs `pwsh`. The Chat/Cowork
+custom plugin uses Bash hooks: `${CLAUDE_PLUGIN_ROOT}` is a single argument,
+but automatic delivery needs `bash` on `PATH`. Install Git for Windows or use
 the skill fallback. The skill itself has no Bash, jq, Python, or Node dependency.
 
 ### `pwsh` is not recognized on Windows
@@ -63,34 +78,13 @@ instead: it works in Windows PowerShell 5.1 and installs PowerShell 7
 automatically. If hooks report that `pwsh` is missing after the install,
 restart the terminal and the agent app so they pick up the new `PATH`.
 
-### Hook runs twice
-
-The marketplace plugin and `./install.sh --target claude` are both enabled.
-Remove one path. The manual installer warns when it sees the marketplace entry.
-
 ### Cloud, SSH, or WSL
 
-Cloud sessions require `extraKnownMarketplaces` and `enabledPlugins` in project
-`.claude/settings.json`:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "choirboy-prompt": {
-      "source": {
-        "source": "github",
-        "repo": "howdeploy/choirboy-prompt"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "choirboy-prompt@choirboy-prompt": true
-  }
-}
-```
-
-Claude still asks the user to trust the marketplace/plugin. SSH can currently
-fail to synchronize `hooks/`; use the skill. Desktop WSL plugins are unavailable.
+Keep the checkout in the environment where Claude Code actually runs, and
+register its hooks there. Local host settings and paths do not configure a
+separate remote runtime. In WSL, use `./install.sh --target claude` from the
+Linux checkout. If the runtime cannot execute hooks, ask the agent to read
+`skills/load-context/SKILL.md` from that checkout.
 
 ## Maintainer checks
 

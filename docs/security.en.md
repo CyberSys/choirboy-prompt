@@ -70,11 +70,12 @@ operational decisions without identifying details.
 
 ### 3.3. Mechanics
 
-- [ ] Manual installation reads the working copy live; marketplace installation
-      uses a cache and receives edits only after a version bump.
+- [ ] Manual installation reads the working copy live; the Chat/Cowork custom
+      plugin ZIP is rebuilt after changes.
 - [ ] `python3 scripts/build-context.py --check` passes: the inline skill is an
       exact generated copy of the sanitized canonical context.
-- [ ] `${CLAUDE_PLUGIN_DATA}/latest-delivery.log` contains metadata only
+- [ ] When the host sets `CLAUDE_PLUGIN_DATA`, its `latest-delivery.log` contains
+      metadata only
       (version, hash, nonce, plugin root), never lore or user text.
 - [ ] The hook works without content files (graceful mode): in a fresh clone
       without the canonical context files it does not fail with
@@ -86,8 +87,8 @@ operational decisions without identifying details.
 - [ ] `LICENSE` exists (README and badge reference it).
 - [ ] Manifest `.claude-plugin/plugin.json` renamed to the public name
       (`choirboy-prompt`), version bumped.
-- [ ] `.claude-plugin/marketplace.json` has the same version as `plugin.json`;
-      `claude plugin validate .` passes.
+- [ ] `.claude-plugin/plugin.json` and `hooks/hooks.json` are valid JSON;
+      the custom-plugin ZIP contains the required hooks and skills.
 
 ### 3.5. Example `.gitignore`
 

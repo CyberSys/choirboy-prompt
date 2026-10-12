@@ -1,37 +1,36 @@
 # Тестирование
 
-Проверки hook, skills, installer, диагностики и пакета. Канонический runner —
-`bash scripts/test.sh`; разделы ниже объясняют отдельные assertions.
+Проверки хука, навыков, установщика, диагностики и пакета. Основная команда —
+`bash scripts/test.sh`; ниже описаны отдельные утверждения, проверяемые набором тестов.
 
 ---
 
 ## 1. Принцип
 
 - Каждая проверка — отдельная bash-команда с явным PASS/FAIL.
-- Сьют можно запускать из любой директории; временные файлы — под `/tmp` с
+- Набор тестов можно запускать из любой директории; временные файлы — под `/tmp` с
   префиксом `choirboy-test.`.
 - После прогона временные файлы удаляются. Чтобы сохранить их и вывести точный
   путь для проверки, задай `CHOIRBOY_TEST_KEEP_TMP=1`.
-- Пейлоад проверяется **в том виде, в каком его получит рантайм**, а
+- Контекст проверяется **в том виде, в каком его получит среда агента**, а
   не «по наитию».
-- Канонический context, research, INDEX и dossiers обязаны быть на английском;
-  suite отклоняет кириллицу/CJK в model-facing Markdown, а artifact validator
-  применяет то же правило в рантайме.
+- Канонический контекст, исследования, INDEX и досье должны быть на английском;
+  набор тестов отклоняет кириллицу/CJK в Markdown для модели, а валидатор
+  артефактов применяет то же правило во время работы.
 
 ---
 
 ## 2. Проверки хука
 
-### 2.1. Manifests и версия
+### 2.1. Манифесты и версия
 
 ```bash
 python3 -c 'import json; d=json.load(open(".claude-plugin/plugin.json")); print(d["name"], d["version"])'
-claude plugin validate .
 ```
 
-Ожидание: оба манифеста валидны, имя и версия печатаются, Claude validator
-сообщает `Validation passed`. Версия в `plugin.json` — источник версии плагина;
-то же значение записывается в marketplace и печатается в пейлоаде.
+Ожидание: `plugin.json` — валидный JSON, имя и версия печатаются.
+Это источник версии плагина, используемой в контексте. Канонический набор тестов
+также проверяет `hooks/hooks.json` пользовательского плагина для Chat/Cowork.
 
 ### 2.2. Claude-формат — валидный JSON с контекстом
 
@@ -40,7 +39,7 @@ bash hooks/session-start.sh --format claude \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "additionalContext" in d["hookSpecificOutput"]; print("OK")'
 ```
 
-Ожидание: `OK`. Дополнительно проверить первый заголовок `prompt.md` и marker
+Ожидание: `OK`. Дополнительно проверить первый заголовок `prompt.md` и маркер
 `choirboy-delivery` с версией, способом доставки, SHA-256 и nonce.
 
 ### 2.3. Claude-формат без jq и python3
@@ -62,13 +61,13 @@ rm -rf "$TMP_BIN"
 проверяет встроенный Bash-кодировщик, который используется при установке из
 Claude Desktop на чистую систему.
 
-### 2.4. Plain-формат — человекочитаемый пейлоад
+### 2.4. Plain-формат — человекочитаемый контекст
 
 ```bash
 bash hooks/session-start.sh --format plain | head -40
 ```
 
-Ожидание: заголовки prompt → posture → lore → user → research-указатель
+Ожидание: заголовки prompt → posture → lore → user → индекс исследований
 в правильном порядке, разделители `---`.
 
 ### 2.5. Hermes: доставка на первом ходу
@@ -79,7 +78,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":true}}' "$SID" \
   | bash hooks/session-start.sh --format hermes | head -c 120
 ```
 
-Ожидание: `{"context": "..."` — пейлоад пришёл.
+Ожидание: `{"context": "..."` — контекст пришёл.
 
 ### 2.6. Hermes: второй ход молчит
 
@@ -91,7 +90,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":false}}' "$SID" \
 
 Ожидание: `{}`.
 
-### 2.7. Hermes: фолбэк без флага — один раз на session_id
+### 2.7. Hermes: резервный вариант без флага — один раз на session_id
 
 ```bash
 SID="hook-check-fb-$(date +%s)"
@@ -103,8 +102,8 @@ printf '{"session_id":"%s"}' "$SID" \
 
 Ожидание: первый вызов — `{"context": ...`, второй — `{}`.
 
-> Питфолл: после теста почистить sid из state-файла
-> `${TMPDIR:-/tmp}/agent-plugin-hermes-${USER}.state`, иначе фолбэк
+> Обрати внимание: после теста удали sid из файла состояния
+> `${TMPDIR:-/tmp}/agent-plugin-hermes-${USER}.state`, иначе резервный вариант
 > «запомнит» sid и следующий прогон с тем же sid вернёт `{}`.
 
 ### 2.8. Hermes: пустой stdin не роняет хук
@@ -118,21 +117,6 @@ printf '' | bash hooks/session-start.sh --format hermes
 ---
 
 ## 3. Проверки установщика
-
-### 3.0. Marketplace-установка в изолированный Claude config
-
-```bash
-VERIFY_CFG="$(mktemp -d)"
-CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin marketplace add "$PWD"
-CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin install choirboy-prompt@choirboy-prompt
-CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin list | grep 'Status: ✔ enabled'
-find "$VERIFY_CFG" -depth -delete
-```
-
-Ожидание: marketplace добавлен, версия плагина установлена во временный cache,
-статус — `enabled`, ошибок загрузки хука нет. Локальный `$PWD` используется
-только для проверки неопубликованной рабочей копии; пользовательский путь из
-README добавляет тот же marketplace с GitHub.
 
 ### 3.1. --list
 
@@ -152,7 +136,7 @@ README добавляет тот же marketplace с GitHub.
 Ожидание: второй запуск печатает `already present — skipped` /
 `unchanged`; файлы не дублируются.
 
-### 3.3. Бэкапы
+### 3.3. Резервные копии
 
 После установки в существующий файл проверить:
 
@@ -160,7 +144,7 @@ README добавляет тот же marketplace с GitHub.
 ls -la ~/.hermes/config.yaml.bak.*
 ```
 
-Ожидание: бэкап с timestamp существует.
+Ожидание: резервная копия с отметкой времени существует.
 
 ### 3.4. Откат
 
@@ -172,7 +156,7 @@ ls -la ~/.hermes/config.yaml.bak.*
 Ожидание: блок удалён, маркер `agent-plugin:vibe-lore` в конфиге
 отсутствует.
 
-### 3.5. Хук не падает без контент-файлов
+### 3.5. Хук не падает без файлов содержимого
 
 Имитация свежего клона (без `prompt.md`/`lore.md`/`user.md`):
 
@@ -185,9 +169,9 @@ echo "exit=$?"   # ожидание: 0 (graceful-режим: файлы проп
 rm -rf "$TMP"
 ```
 
-Graceful-режим реализован в `hooks/session-start.sh`: отсутствующие
-контент-файлы пропускаются с предупреждением в stderr, хук не падает
-с `set -euo pipefail` (см. `docs/security.md` §3.3).
+Режим мягкого отказа реализован в `hooks/session-start.sh`: отсутствующие
+файлы содержимого пропускаются с предупреждением в stderr, хук не падает
+с `set -euo pipefail` (см. [docs/security.md](security.md) §3.3).
 
 ### 3.6. Переезд папки плагина
 
@@ -200,28 +184,28 @@ mv /path/to/plugin /path/to/plugin-moved
 ```
 
 Ожидание: в `~/.claude/settings.json` одна запись нашего хука (не две);
-старая заменилась новой — `json_hook` матчит по имени скрипта.
+старая заменилась новой — `json_hook` сопоставляет записи по имени скрипта.
 
 ### 3.7. Жизненный цикл адаптера OpenCode
 
-Канонический сьют устанавливает адаптер в изолированный `HOME`, повторяет
+Основной набор тестов устанавливает адаптер в изолированный `HOME`, повторяет
 установку, проверяет `--list`, обновляет намеренно изменённый маркированный
-plugin с бэкапом и откатывает его с ещё одним бэкапом. Отдельно проверяется, что
+плагин с резервной копией и удаляет его с ещё одной резервной копией. Отдельно проверяется, что
 чужой немаркированный файл `~/.config/opencode/plugins/agent-plugin.ts` никогда
 не перезаписывается.
 
 Ожидание: проверки `OpenCode install, list, idempotent refresh, backup, and
 rollback` и `OpenCode foreign-plugin guard` печатают `PASS`. Сгенерированный
-адаптер должен использовать transform model-bound system context, пересобирать
-канонический plain-payload после compaction, показывать переход pending→ready и
-изменения freshness, сохраняя fail-open обработку ошибок. Assertions перехода
-рантайма живут в `scripts/test-opencode-transition.ts` и запускаются под `bun`;
-если `bun` недоступен, сьют печатает `SKIP OpenCode pending-to-ready runtime
+адаптер должен преобразовывать системный контекст модели, пересобирать
+канонический текстовый контекст после сжатия истории, отражать переход
+pending→ready и изменения актуальности, сохраняя работу чата при ошибках.
+Проверки переходов состояния среды находятся в `scripts/test-opencode-transition.ts` и запускаются под `bun`;
+если `bun` недоступен, набор тестов печатает `SKIP OpenCode pending-to-ready runtime
 test (bun unavailable)` в stderr вместо падения.
 
 ---
 
-## 4. Проверки контента (санитизация)
+## 4. Проверки содержимого (очистка)
 
 Перед любой публикацией:
 
@@ -238,11 +222,11 @@ for f in $(grep -rhoE "(research/[0-9]+-[a-z-]+\.md|research/coldcard/[a-z_.]+\.
 done
 ```
 
-Ожидание: grep'ы пустые; замыкание без BROKEN.
+Ожидание: grep не выдаёт результатов; проверка ссылок не выдаёт BROKEN.
 
 ---
 
-## 5. Канонический сьют и пакет
+## 5. Основной набор тестов и пакет
 
 ```bash
 bash scripts/test.sh
@@ -254,9 +238,9 @@ python3 scripts/package-plugin.py
 ## 6. Когда запускать
 
 - После любой правки `hooks/session-start.sh` — п. 2.2–2.8.
-- После правки `.claude-plugin/plugin.json` или `marketplace.json` — п. 2.1 и 3.0.
+- После правки `.claude-plugin/plugin.json` — п. 2.1.
 - После правки `install.sh` — п. 3.1–3.7.
-- После правки контентных файлов — `python3 scripts/build-context.py`, затем
-  канонический сьют и п. 4 (замыкание, санитизация).
+- После правки файлов содержимого — `python3 scripts/build-context.py`, затем
+  канонический набор тестов и п. 4 (очистка).
 - После правки `instruction_block` — grep по маркеру в установленных
-  файлах (см. `docs/installer.md` §3.3).
+  файлах (см. [docs/installer.md](installer.md) §3.3).

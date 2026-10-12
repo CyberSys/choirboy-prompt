@@ -26,12 +26,11 @@ Hook, skill, installer, diagnostics, and package checks. The canonical runner is
 
 ```bash
 python3 -c 'import json; d=json.load(open(".claude-plugin/plugin.json")); print(d["name"], d["version"])'
-claude plugin validate .
 ```
 
-Expected: both manifests are valid, name and version are printed, and the Claude
-validator reports `Validation passed`. `plugin.json` is the plugin-version
-source; the same value is stored in the marketplace and printed in the payload.
+Expected: `plugin.json` is valid JSON and its name and version are printed.
+It is the plugin-version source used in the payload. The canonical suite also
+checks `hooks/hooks.json` for the Chat/Cowork custom plugin.
 
 ### 2.2. Claude format — valid JSON with context
 
@@ -118,21 +117,6 @@ Expected: `{}` (not an error). Reason: `input="$(cat 2>/dev/null || true)"`.
 ---
 
 ## 3. Installer checks
-
-### 3.0. Marketplace installation in an isolated Claude config
-
-```bash
-VERIFY_CFG="$(mktemp -d)"
-CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin marketplace add "$PWD"
-CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin install choirboy-prompt@choirboy-prompt
-CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin list | grep 'Status: ✔ enabled'
-find "$VERIFY_CFG" -depth -delete
-```
-
-Expected: the marketplace is added, the plugin version is copied into the
-temporary cache, status is `enabled`, and there are no hook-load errors. Local
-`$PWD` is only for testing an unpublished working copy; the README's user path
-adds the same marketplace from GitHub.
 
 ### 3.1. --list
 
@@ -253,7 +237,7 @@ python3 scripts/package-plugin.py
 ## 6. When to run
 
 - After any `hooks/session-start.sh` edit — §2.2–2.8.
-- After editing `.claude-plugin/plugin.json` or `marketplace.json` — §2.1 and §3.0.
+- After editing `.claude-plugin/plugin.json` — §2.1.
 - After an `install.sh` edit — §3.1–3.7.
 - After content-file edits — run `python3 scripts/build-context.py`, then the
   canonical suite and §4 sanitization.

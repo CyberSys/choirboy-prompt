@@ -123,8 +123,9 @@ python3 scripts/package-plugin.py
 ```
 
 Then inspect the generated marker and confirm that hook and skill hashes match.
-Marketplace installations use a cached copy, so bump both manifest versions for
-a release. Manual `install.sh` installations read the working copy directly.
+For a release, update the version in `.claude-plugin/plugin.json` and rebuild
+the custom-plugin ZIP. Manual `install.sh` installations read the working copy
+directly.
 
 ## 8. Required quality gate
 

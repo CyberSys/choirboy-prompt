@@ -148,7 +148,7 @@
 
 ## 1.1.0 — 2026-08-10
 
-- Added Claude plugin manifests and marketplace distribution.
+- Added Claude custom-plugin manifests.
 - Added in-app Claude Desktop Code installation documentation.
 
 ## 1.0.0

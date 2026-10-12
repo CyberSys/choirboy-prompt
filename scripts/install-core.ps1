@@ -844,7 +844,6 @@ function Invoke-DoClaude {
         }
     } else {
         Write-Host "claude: installing SessionStart/Stop hooks into $file"
-        if (Test-FileContains $file @('choirboy-prompt@choirboy-prompt')) { [Console]::Error.WriteLine("  warning: marketplace plugin appears enabled in $file; manual hooks would run twice") }
         foreach ($spec in @(
             @{ Dot = 'hooks.SessionStart'; Script = $script:HookScript },
             @{ Dot = 'hooks.Stop'; Script = $script:StopHookScript }

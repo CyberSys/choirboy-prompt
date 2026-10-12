@@ -6,59 +6,50 @@ document is "how it gets installed and removed".
 
 ---
 
-## 0. Claude plugin installation
+## 0. Claude setup
 
-The repository is a versioned Claude marketplace through
-`.claude-plugin/marketplace.json`. The installed package contains both the
-Claude Code `SessionStart` and `Stop` hooks plus skills for Chat and Cowork.
+### 0.1. Claude Code CLI / local Desktop Code
 
-### 0.1. Claude Code CLI
+Register hooks directly in Claude settings from the repository checkout:
 
-```text
-/plugin marketplace add howdeploy/choirboy-prompt
-/plugin install choirboy-prompt@choirboy-prompt
+```bash
+./install.sh --target claude
 ```
 
-Start a new session after installation. Update or remove from the CLI with:
+On Windows:
 
-```text
-/plugin marketplace update choirboy-prompt
-/plugin update choirboy-prompt@choirboy-prompt
-/plugin uninstall choirboy-prompt@choirboy-prompt
-/plugin marketplace remove choirboy-prompt
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 --target claude
 ```
 
-### 0.2. Claude Desktop Code
+The installer registers SessionStart and Stop in `~/.claude/settings.json`
+(or the path selected by `--settings` / `--project`). Start a new session
+after installation. SessionStart sends a short status; ask the agent to read
+`skills/load-context/SKILL.md` from this checkout for the full lore.
+The hook status also identifies that local source. Updates read the working
+copy directly. Re-run the installer after moving the checkout; use
+`--uninstall --target claude` to remove the registrations.
 
-Desktop does not expose the terminal `/plugin` dialog. Add
-`https://github.com/howdeploy/choirboy-prompt` under **Customize → Plugins →
-Personal plugins → + → Add marketplace**. In a local Code session choose
-**+ → Plugins → Add plugin → choirboy-prompt**, then start a new session.
-
-The marketplace cache supplies `${CLAUDE_PLUGIN_ROOT}`. `hooks/hooks.json` uses
-the documented exec form (`command: bash`, one path in `args`) so spaces and
-shell metacharacters in the cache path are not tokenized. A 15-second timeout
-prevents a stuck hook from blocking session startup.
-
-### 0.3. Claude Chat and Cowork
+### 0.2. Claude Chat and Cowork
 
 Install the repository as a custom plugin under **Customize → Plugins**, or
 upload the ZIP produced by `python3 scripts/package-plugin.py`. Chat does not
-run `SessionStart`: invoke the **load-context** skill. Cowork may use the hook
+run SessionStart: invoke the **load-context** skill. Cowork may use the hook
 where supported; the skill is its fallback. The **diagnose** skill proves
 delivery from a `choirboy-delivery` marker instead of relying on model wording.
 
-### 0.4. Boundaries
+The custom-plugin package retains `.claude-plugin/plugin.json` and
+`hooks/hooks.json`. Its hooks use `command: bash`, one path in `args`,
+and a 15-second timeout; the host supplies `${CLAUDE_PLUGIN_ROOT}`.
 
-- the automatic hook requires `bash`; the skill does not;
-- Cloud Code sessions need project `enabledPlugins` and do not inherit a local
-  Desktop installation;
-- Desktop WSL plugins are unavailable, and SSH hook sync is currently
-  unreliable; use the skill fallback;
-- do not enable both the marketplace plugin and `./install.sh --target claude`:
-  Claude would load the payload twice;
-- publishing requires the same version bump in `plugin.json` and marketplace,
-  followed by `python3 scripts/build-context.py` and the test suite.
+### 0.3. Boundaries
+
+- Custom-plugin hooks need `bash`; their skill fallback does not.
+- Manual Windows registrations use PowerShell hooks.
+- For Code over SSH, WSL, or Cloud, register hooks in the environment where
+  the agent runs; local host settings are not a remote installation.
+- For a release, update `plugin.json`, regenerate the context, and validate
+  the package before distributing it.
 
 ---
 
@@ -164,9 +155,6 @@ script paths to distinguish a current install from a `stale` one.
   `artifact-stop.sh` in the
   command), not by absolute path: if the plugin folder moved, the stale
   registration is replaced, not duplicated.
-- A marketplace hook lives in the plugin cache and is not written into the
-  `settings.json` hook array. The marketplace and manual Claude hook are
-  alternatives, not two layers to enable at once.
 - The OpenCode target owns one complete marked plugin file. An identical
   reinstall is a no-op; an update is backed up and replaced atomically.
 - Hermes consent entries, Kimi's four hooks, Gemini/Grok instruction blocks,

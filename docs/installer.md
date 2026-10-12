@@ -1,62 +1,54 @@
 # Установщик
 
-Полный разбор `install.sh`: таргеты, маркеры, идемпотентность, бэкапы,
-`--instructions`, edge-cases. Если архитектура — «что установлено»,
-то этот документ — «как это ставится и снимается».
+Полный разбор `install.sh`: целевые среды, маркеры, идемпотентность, резервные
+копии, `--instructions` и особые случаи. Архитектура описывает, что установлено,
+а этот документ — как плагин устанавливается и удаляется.
 
 ---
 
-## 0. Установка Claude plugin
+## 0. Настройка Claude
 
-Репозиторий является версионированным Claude marketplace через
-`.claude-plugin/marketplace.json`. Установленный пакет содержит и
-хуки Claude Code `SessionStart` и `Stop`, и skills для Chat/Cowork.
+### 0.1. Claude Code CLI / локальный Desktop Code
 
-### 0.1. Claude Code CLI
+Зарегистрируй хуки напрямую в настройках Claude из рабочей копии репозитория:
 
-```text
-/plugin marketplace add howdeploy/choirboy-prompt
-/plugin install choirboy-prompt@choirboy-prompt
+```bash
+./install.sh --target claude
 ```
 
-После установки открой новую сессию. Обновление и удаление через CLI:
+На Windows:
 
-```text
-/plugin marketplace update choirboy-prompt
-/plugin update choirboy-prompt@choirboy-prompt
-/plugin uninstall choirboy-prompt@choirboy-prompt
-/plugin marketplace remove choirboy-prompt
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 --target claude
 ```
 
-### 0.2. Claude Desktop Code
+Установщик регистрирует SessionStart и Stop в `~/.claude/settings.json`
+(или по пути, выбранному через `--settings` / `--project`). После установки
+открой новую сессию. SessionStart отправляет короткий статус; для полной памяти
+попроси агента прочитать `skills/load-context/SKILL.md` из этой рабочей копии.
+Путь к локальному источнику также указан в статусе хука. Обновления читаются
+напрямую из рабочей копии. После её перемещения запусти установщик повторно;
+для удаления регистраций используй `--uninstall --target claude`.
 
-Desktop не предоставляет терминальный диалог `/plugin`. Добавь
-`https://github.com/howdeploy/choirboy-prompt` через **Customize → Plugins →
-Personal plugins → + → Add marketplace**. В локальной Code-сессии выбери
-**+ → Plugins → Add plugin → choirboy-prompt**, затем открой новую сессию.
+### 0.2. Claude Chat и Cowork
 
-Marketplace cache выставляет `${CLAUDE_PLUGIN_ROOT}`. `hooks/hooks.json`
-использует документированный exec-form (`command: bash`, путь отдельным
-элементом `args`), поэтому пробелы и shell-символы в пути не разбираются shell.
-Timeout 15 секунд не даёт зависшему хуку блокировать старт сессии.
+Установи репозиторий как пользовательский плагин через **Customize → Plugins**
+или загрузи ZIP, созданный `python3 scripts/package-plugin.py`. Chat не запускает
+SessionStart — используй навык **load-context**. Cowork использует хук там,
+где он поддерживается; навык остаётся резервным вариантом. Навык **diagnose**
+подтверждает доставку по маркеру `choirboy-delivery`, а не по формулировкам модели.
 
-### 0.3. Claude Chat и Cowork
+Пакет пользовательского плагина сохраняет `.claude-plugin/plugin.json` и
+`hooks/hooks.json`. Его хуки используют `command: bash`, один путь в `args`
+и таймаут 15 секунд; хост предоставляет `${CLAUDE_PLUGIN_ROOT}`.
 
-Установи репозиторий как custom plugin через **Customize → Plugins** или загрузи
-ZIP от `python3 scripts/package-plugin.py`. Chat не запускает `SessionStart` —
-используй skill **load-context**. Cowork использует хук там, где он поддержан,
-а skill остаётся fallback. Skill **diagnose** доказывает доставку по маркеру
-`choirboy-delivery`, а не по формулировке ответа модели.
+### 0.3. Границы
 
-### 0.4. Границы
-
-- автоматическому хуку нужен `bash`, skill от него не зависит;
-- Cloud Code требует project `enabledPlugins` и не наследует локальную Desktop-установку;
-- Desktop WSL не поддерживает plugins, а SSH sync хуков пока ненадёжен — используй skill;
-- не включай одновременно marketplace-плагин и `./install.sh --target claude`:
-  Claude загрузит пейлоад дважды;
-- релиз требует одинакового version bump в manifest и marketplace, затем
-  `python3 scripts/build-context.py` и тестовый сьют.
+- Хукам пользовательского плагина нужен `bash`; резервный навык от него не зависит.
+- Ручная установка на Windows использует PowerShell-хуки.
+- Для Code через SSH, WSL или Cloud регистрируй хуки в среде, где работает агент;
+  локальные настройки хоста не устанавливают плагин в удалённую среду.
+- Для релиза обнови `plugin.json`, пересобери контекст и проверь пакет перед распространением.
 
 ---
 
@@ -71,33 +63,33 @@ ZIP от `python3 scripts/package-plugin.py`. Chat не запускает `Sess
 
 | Режим | Что делает |
 |---|---|
-| install (по умолчанию) | Регистрирует хуки/блок и готовит artifact request |
+| install (по умолчанию) | Регистрирует хуки/блоки и готовит запрос артефактов |
 | `--uninstall` | Удаляет регистрации, но сохраняет созданные агентом артефакты |
 | `--list` | Без записи показывает `absent` / `detected` / `stale` / `installed` (`prepared` для Grok Bot) |
 
-Требование `install.sh`: `python3` для JSON-операций. Форматы хука `claude` и
+Для `install.sh` нужен `python3` для операций с JSON. Форматы хука `claude` и
 `plain` работают на Bash без `jq`/`python3`; формат `hermes` требует один из
-этих двух JSON-парсеров. Автоматический lifecycle артефактов требует `python3`:
-установщик готовит только request, а следующая сессия поручает текущему агенту
-написать dossiers и пройти validator. Request и validator требуют, чтобы INDEX
-и dossiers были на английском. Хранилище артефактов стабильно при смене
-checkout. Приоритет путей: `CHOIRBOY_ARTIFACTS_DIR` →
+этих двух JSON-парсеров. Автоматический жизненный цикл артефактов требует
+`python3`: установка готовит только метаданные, а следующая сессия просит текущего
+агента написать досье и пройти валидатор. Хранилище артефактов сохраняется при
+смене рабочей копии. Запрос и валидатор требуют английского содержимого INDEX
+и досье. Приоритет путей: `CHOIRBOY_ARTIFACTS_DIR` →
 `${CLAUDE_PLUGIN_DATA}/project-artifacts` →
 `${XDG_DATA_HOME}/choirboy-prompt/project-artifacts` →
 `~/.local/share/choirboy-prompt/project-artifacts`.
 
-Перед перезаписью регистраций установщик проверяет текущие и старые hook-paths,
-а также `artifacts/` текущего checkout. Если в стабильном root ещё нет
-созданного агентом payload, туда копируется первый найденный bundle из INDEX,
-manifest и dossiers. Существующие стабильные артефакты не перезаписываются;
-uninstall их сохраняет. Ready-bundle полностью перевалидируется и вкладывается
-inline в hook context — рантайм не получает только путь к INDEX.
+Перед перезаписью регистраций установщик проверяет текущие и прежние пути хуков,
+а также `artifacts/` текущей рабочей копии. Если в постоянном корневом каталоге
+ещё нет созданного агентом содержимого, туда копируется первый найденный старый
+комплект INDEX, манифеста и досье. Существующие артефакты не перезаписываются,
+а удаление плагина сохраняет их. Готовый комплект полностью проверяется заново
+и включается в контекст хука целиком; среда не получает только путь к INDEX.
 
 ---
 
-## 2. Таргеты
+## 2. Целевые среды
 
-Детекция рантайма — по бинарю или наличию конфиг-директории:
+Среда обнаруживается по исполняемому файлу или наличию каталога конфигурации:
 
 ```bash
 claude) command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] ;;
@@ -111,29 +103,29 @@ grokbot) command -v grokbot >/dev/null 2>&1 || command -v grok-bot >/dev/null 2>
            || [ -d "$HOME/.grokbot" ] ;;
 ```
 
-Правила выбора таргетов:
+Правила выбора целевых сред:
 
 - `--target claude,opencode` — только перечисленные.
 - `--target none` — пустой список, полезно с `--instructions`.
-- Без `--target` — все обнаруженные рантаймы.
-- `--project` / `--settings PATH` подразумевают таргет `claude`.
+- Без `--target` — все обнаруженные среды.
+- `--project` / `--settings PATH` подразумевают цель `claude`.
 
-Каждый таргет пишет в свой файл:
+Каждая цель записывает настройки в свой файл:
 
-| Таргет | Файл | Механизм |
+| Цель | Файл | Механизм |
 |---|---|---|
 | claude | `~/.claude/settings.json` (или `--settings`/`--project`) | JSON-хуки `SessionStart` + `Stop` |
 | codex | `~/.codex/hooks.json` | JSON-хуки `SessionStart` + `Stop` |
-| opencode | `~/.config/opencode/plugins/agent-plugin.ts` | transform model-bound system context |
-| hermes | `~/.hermes/config.yaml` | маркированный блок `hooks.pre_llm_call` + consent-allowlist |
-| kimi | `${KIMI_CODE_HOME:-~/.kimi-code}/config.toml` | маркированные SessionStart + PreCompact + UserPromptSubmit + Stop hooks |
-| gemini | `~/.gemini/GEMINI.md` | маркированный HTML lifecycle-блок инструкций |
-| grok | `~/.grok/AGENTS.md` | маркированный HTML lifecycle-блок (глобальные правила Grok Build) |
-| grokbot | `~/.grokbot/choirboy-context/SKILL.md` | подготовленный импортируемый workflow (не автозагружается) |
-| pi | `~/.pi/agent/APPEND_SYSTEM.md` | блок инструкций и ссылка `skills/load-context` |
-| omp | `~/.omp/agent/AGENTS.md` | блок инструкций и ссылка `skills/load-context` |
-| llama | `~/.config/llama.cpp/choirboy-ui.json` | `systemMessage` UI и ссылка на skill |
-| `--instructions FILE` | любой файл | маркированный lifecycle-блок инструкций (HTML или `#`) |
+| opencode | `~/.config/opencode/plugins/agent-plugin.ts` | преобразование системного контекста модели |
+| hermes | `~/.hermes/config.yaml` | блок `hooks.pre_llm_call` с маркерами + список разрешённых команд |
+| kimi | `${KIMI_CODE_HOME:-~/.kimi-code}/config.toml` | хуки SessionStart + PreCompact + UserPromptSubmit + Stop с маркерами |
+| gemini | `~/.gemini/GEMINI.md` | блок инструкций жизненного цикла с HTML-маркерами |
+| grok | `~/.grok/AGENTS.md` | блок инструкций жизненного цикла с HTML-маркерами (глобальные правила Grok Build) |
+| grokbot | `~/.grokbot/choirboy-context/SKILL.md` | подготовленный рабочий процесс для импорта (не загружается автоматически) |
+| pi | `~/.pi/agent/APPEND_SYSTEM.md` | блок инструкций и символическая ссылка `skills/load-context` |
+| omp | `~/.omp/agent/AGENTS.md` | блок инструкций и символическая ссылка `skills/load-context` |
+| llama | `~/.config/llama.cpp/choirboy-ui.json` | `systemMessage` интерфейса и символическая ссылка на навык |
+| `--instructions FILE` | любой файл | блок инструкций жизненного цикла с маркерами (HTML или `#`) |
 
 ---
 
@@ -143,9 +135,9 @@ grokbot) command -v grokbot >/dev/null 2>&1 || command -v grok-bot >/dev/null 2>
 
 Все блоки помечены `MARK="agent-plugin:vibe-lore"`. Формы маркеров:
 
-- hash-стиль (конфиги, TOML): `# >>> agent-plugin:vibe-lore >>>` /
+- стиль с `#` (конфигурации, TOML): `# >>> agent-plugin:vibe-lore >>>` /
   `# <<< agent-plugin:vibe-lore <<<`
-- html-стиль (markdown-инструкции): `<!-- agent-plugin:vibe-lore START -->` /
+- HTML-стиль (инструкции Markdown): `<!-- agent-plugin:vibe-lore START -->` /
   `<!-- agent-plugin:vibe-lore END -->`
 
 Маркер — это и идентификатор владения, и граница блока для удаления.
@@ -157,36 +149,33 @@ grokbot) command -v grokbot >/dev/null 2>&1 || command -v grok-bot >/dev/null 2>
 
 - `block_sync` добавляет отсутствующий управляемый блок или атомарно заменяет
   ровно один полный START/END-блок актуальным сгенерированным текстом. Соседний
-  пользовательский контент сохраняется; сломанные, дублированные или вложенные
+  пользовательское содержимое сохраняется; сломанные, дублированные или вложенные
   маркеры отклоняются.
-- `json_hook` матчит записи по имени скрипта (`session-start.sh` или
+- `json_hook` сопоставляет записи по имени скрипта (`session-start.sh` или
   `artifact-stop.sh` в
   команде), а не по абсолютному пути: если папка плагина переехала,
-  устаревшая регистрация заменяется, а не кладётся вторая.
-- Marketplace-хук живёт в plugin cache и не записывается в массив хуков
-  `settings.json`. Поэтому marketplace и ручной Claude-хук — альтернативы, а
-  не два одновременно включаемых слоя.
-- Таргет OpenCode владеет одним целым маркированным plugin-файлом. Повторная
-  установка без изменений ничего не делает; обновление бэкапится и атомарно
+  устаревшая регистрация заменяется, а не дублируется.
+- Цель OpenCode владеет одним целым файлом плагина с маркером. Повторная
+  установка без изменений ничего не делает; перед обновлением создаётся резервная копия, затем оно и атомарно
   заменяет файл.
-- Consent-entry Hermes, четыре Kimi-hook, блоки Gemini/Grok и произвольные
+- Разрешения Hermes, четыре хука Kimi, блоки Gemini/Grok и произвольные
   `--instructions` синхронизируются при каждом запуске установщика. Старые
   абсолютные пути и ревизии регистрации обновляются на месте.
 
 ### 3.3. Обновление управляемых блоков
 
-Старого skip-only поведения больше нет. Повторный install пересобирает и
+Прежнего поведения с пропуском существующего блока больше нет. Повторная установка пересобирает и
 заменяет принадлежащий плагину блок, если изменились путь скрипта,
-lifecycle-текст или ревизия регистрации; перед заменой создаётся
-timestamp-backup. `--list` показывает `stale`, если управляемая регистрация
+текст жизненного цикла или ревизия регистрации; перед заменой создаётся
+резервная копия с отметкой времени. `--list` показывает `stale`, если управляемая регистрация
 существует, но не совпадает с текущей. Для синхронизации достаточно обычного
-install; цикл uninstall/install не нужен.
+запуска установки; удалять и ставить заново не нужно.
 
 ---
 
-## 4. Бэкапы и откат
+## 4. Резервные копии и откат
 
-Каждая правка существующего файла предваряется бэкапом:
+Перед каждой правкой существующего файла создаётся резервная копия:
 
 ```bash
 backup() {
@@ -208,26 +197,26 @@ backup() {
 
 | Функция | Назначение | Ключевая логика |
 |---|---|---|
-| `target_present` | Детект рантайма | бинарь или конфиг-дир |
+| `target_present` | Обнаружение среды | исполняемый файл или каталог конфигурации |
 | `claude_settings_file` | Куда писать Claude-хук | `--settings` > `--project` > `~/.claude/settings.json` |
-| `target_installed` | Точная актуальная установка? | per-target проверки ревизии/path/hooks |
-| `target_managed_present` | Есть старая наша установка? | ownership-маркер/script ids; даёт `stale` |
-| `backup` | Бэкап перед правкой | `cp -p` с timestamp |
+| `target_installed` | Точная актуальная установка? | проверки ревизии, пути и хуков для каждой цели |
+| `target_managed_present` | Есть старая наша установка? | маркер владения и идентификаторы скриптов; даёт `stale` |
+| `backup` | Резервная копия перед правкой | `cp -p` с отметкой времени |
 | `block_sync` | Добавить или обновить маркированный блок | точная замена START/END, атомарная запись |
 | `block_remove` | Удалить маркированный блок | по START/END, чистит хвостовую пустую строку |
-| `json_hook` | Хук в Claude-образный JSON | матч по имени скрипта, `is_ours()`/`has_exact()` |
-| `opencode_plugin` | Управление адаптером OpenCode | guard по маркеру, атомарная замена, timestamp-бэкап |
-| `hermes_allowlist` | Consent-allowlist Hermes | точная пара (event, command) |
-| `instruction_block` | Текст lifecycle-инструкции | HTML или `#`-комментарии |
-| `grokbot_workflow` | Управление workflow-файлом Grok Bot | `install`/`uninstall`/`status`, guard по маркеру |
-| `discover_legacy_artifact_roots` | Найти старые checkout-local bundles | читает старые управляемые абсолютные пути |
-| `do_claude` / `do_codex` / `do_opencode` / `do_hermes` / `do_kimi` / `do_gemini` / `do_grok` / `do_grokbot` | Установка в таргет | per-target логика |
+| `json_hook` | Хук в Claude-образный JSON | сопоставление по имени скрипта, `is_ours()`/`has_exact()` |
+| `opencode_plugin` | Управление адаптером OpenCode | защита по маркеру, атомарная замена, резервная копия с отметкой времени |
+| `hermes_allowlist` | Список разрешённых команд Hermes | точная пара (событие, команда) |
+| `instruction_block` | Текст инструкций жизненного цикла | HTML или `#`-комментарии |
+| `grokbot_workflow` | Управление файлом рабочего процесса Grok Bot | `install`/`uninstall`/`status`, защита по маркеру |
+| `discover_legacy_artifact_roots` | Найти старые комплекты в рабочих копиях | читает старые управляемые абсолютные пути |
+| `do_claude` / `do_codex` / `do_opencode` / `do_hermes` / `do_kimi` / `do_gemini` / `do_grok` / `do_grokbot` | Установка в целевую среду | логика для каждой цели |
 | `do_instructions` | Установка в произвольный файл | стиль по расширению |
 
 ### 5.1. `json_hook` — детали
 
 Работает с Claude-образными JSON-файлами хуков (`settings.json`,
-`hooks.json`). Ключевое — **матчинг по имени скрипта**, а не по пути:
+`hooks.json`). Ключевое — **сопоставление по имени скрипта**, а не по пути:
 
 ```python
 def is_ours(entry):
@@ -236,18 +225,18 @@ def is_ours(entry):
                for h in entry.get("hooks", []))
 ```
 
-- install: удаляет stale-регистрации нашего скрипта (папка переехала),
-  добавляет точный handler. Claude получает `command: bash`, один путь в `args`
-  и `timeout: 15`; Codex сохраняет строковую команду и ставит
+- установка: удаляет устаревшие регистрации нашего скрипта (папка переехала),
+  добавляет точный обработчик, если его нет. Claude получает `command: bash`, один путь в `args`
+  и `timeout: 15`; Codex сохраняет команду с кавычками и ставит
   `additionalContextLimit: 4000`, чтобы короткий статус SessionStart не уходил
-  в spill. Фиксированный лор через этот хук не отправляется.
-- uninstall: удаляет все записи `is_ours()`.
-- Невалидный JSON не заменяет; при реальном изменении сохраняет бэкап и пишет
+  во внешний вывод. Фиксированный лор через этот хук не отправляется.
+- удаление: удаляет все записи `is_ours()`.
+- Невалидный JSON не заменяет; при реальном изменении сохраняет резервную копию и пишет
   новый файл атомарно.
 
 ### 5.2. `hermes_allowlist` — детали
 
-Hermes требует явного consent на shell-хук: пара `(event, command)` в
+Hermes требует явного согласия на хук оболочки: пара `(event, command)` в
 `~/.hermes/shell-hooks-allowlist.json`. Функция добавляет/удаляет точную
 пару `("pre_llm_call", "<session-start.sh> --format hermes")`, не заменяет
 битый JSON и пишет валидное изменение атомарно.
@@ -256,37 +245,37 @@ Hermes требует явного consent на shell-хук: пара `(event, 
 
 Работают с текстовыми конфигами (config.yaml, config.toml, GEMINI.md):
 
-- sync: добавляет блок, если его нет; иначе заменяет ровно один полный диапазон
-  START/END, сохраняя весь окружающий контент. Идентичный текст — no-op.
-- safety: сломанные, повторные или вложенные маркеры останавливают установку,
-  а не заставляют её угадывать ownership. Реальная замена получает backup и
+- синхронизация: добавляет блок, если его нет; иначе заменяет ровно один полный диапазон
+  START/END, сохраняя весь окружающий контент. Идентичный текст не изменяется.
+- безопасность: сломанные, повторные или вложенные маркеры останавливают установку,
+  а не заставляют её угадывать принадлежность блока. Перед реальной заменой создаётся резервная копия и
   пишется атомарно.
-- remove: вырезает от START до END включительно, убирает одну
-  предшествующую пустую строку, если она осталась от add.
+- удаление: вырезает от START до END включительно, убирает одну
+  предшествующую пустую строку, если она осталась после добавления.
 
-### 5.4. Lifecycle-hooks Kimi 0.39.x
+### 5.4. Хуки жизненного цикла Kimi 0.39.x
 
 Kimi 0.39.x отбрасывает stdout `SessionStart`, поэтому управляемый TOML-блок
-ставит четыре hook:
+устанавливает четыре хука:
 
-- `SessionStart` (`startup|resume`) готовит artifact state и сбрасывает
-  fingerprint доставки;
-- `PreCompact` (`manual|auto`) синхронно сбрасывает его до compaction;
-- `UserPromptSubmit` запускает каноническую plain-доставку и повторяет pending
-  bootstrap либо выдаёт ready-bundle при изменении fingerprint;
-- `Stop` при pending-валидации завершает работу с кодом 2 и continuation request
+- `SessionStart` (`startup|resume`) готовит состояние артефактов и сбрасывает
+  отпечаток доставки;
+- `PreCompact` (`manual|auto`) синхронно сбрасывает его до сжатия контекста;
+- `UserPromptSubmit` запускает каноническую текстовую доставку и повторяет запрос начальной
+  подготовки при `pending` либо выдаёт готовый комплект при изменении отпечатка;
+- `Stop` при незавершённой проверке завершает работу с кодом 2 и запрос продолжения
   в stderr, а при `ready` возвращает 0.
 
-State-markers находятся в
+Маркеры состояния находятся в
 `${KIMI_CODE_HOME:-~/.kimi-code}/choirboy-prompt/hook-state`, если путь не
-переопределён через `CHOIRBOY_STATE_DIR`. Нормализованный ready-fingerprint
+переопределён через `CHOIRBOY_STATE_DIR`. Нормализованный отпечаток готового комплекта
 записывается только после успешной выдачи stdout.
 
 ---
 
-## 6. Edge-cases
+## 6. Особые случаи
 
-1. **Уже есть top-level `hooks:` в Hermes-конфиге.** Установщик
+1. **Уже есть на верхнем уровне `hooks:` в Hermes-конфиге.** Установщик
    отказывается (`die`) с инструкцией слить блоки вручную — чтобы не
    затереть чужие хуки.
 2. **Уже есть `hooks =` в Kimi-конфиге.** Аналогично: die с подсказкой
@@ -294,24 +283,24 @@ State-markers находятся в
 3. **Codex: хуки выключены.** Нашлась строка `hooks = false` в
    `~/.codex/config.toml` → предупреждение (не блокировка).
 4. **Файла нет.** `mkdir -p` + создание пустого `{}`/пустого файла.
-5. **Папка плагина переехала.** JSON-hooks матчатся по имени скрипта, а
+5. **Папка плагина переехала.** JSON-хуки сопоставляются по имени скрипта, а
    управляемые текстовые блоки синхронизируются: старые абсолютные пути
    заменяются без дублей.
-6. **Повторный запуск или обновление.** Актуальные регистрации — no-op; старые
-   наши регистрации показываются как `stale` и обновляются обычным install.
+6. **Повторный запуск или обновление.** Актуальные регистрации не изменяются; старые
+   наши регистрации показываются как `stale` и обновляются обычной установкой.
 7. **`--uninstall` без установки.** `no block in file — skipped`, не
    падает.
 8. **`--target none` + `--instructions`.** Только управляемые
-   lifecycle-блоки инструкций, без runtime-specific hooks.
-9. **Параллельные старты Hermes.** State-файл в `/tmp` без блокировок —
+   блоки инструкций жизненного цикла, без хуков конкретных сред.
+9. **Параллельные старты Hermes.** Файл состояния в `/tmp` без блокировок —
    возможны гонки (известное ограничение, см. README).
-10. **Чужой OpenCode-плагин по управляемому пути.** Install и uninstall
-    отказываются перезаписывать или удалять файл без ownership-маркера.
+10. **Чужой OpenCode-плагин по управляемому пути.** Установка и удаление
+    отказываются перезаписывать или удалять файл без маркера владения.
 11. **Windows без PowerShell 7.** Корневой `install.ps1` — загрузчик,
     который запускается в любом PowerShell, включая Windows PowerShell 5.1.
     Он ищет `pwsh` 7 в `PATH` и в стандартных путях установки; если его нет,
     ставит `Microsoft.PowerShell` через `winget`, а при неудаче — подписанный
-    Microsoft MSI из релизов PowerShell на GitHub (сверяются checksum и
+    Microsoft MSI из релизов PowerShell на GitHub (сверяются контрольная сумма и
     Authenticode-подпись, Windows просит подтверждение администратора). Затем
     запускает `scripts/install-core.ps1` под `pwsh`. Зарегистрированные хуки
     вызывают `pwsh` из `PATH`, поэтому терминалы и приложения агентов, открытые
@@ -334,9 +323,9 @@ echo '{"session_id":"hook-check","extra":{"is_first_turn":false}}' \
   | bash hooks/session-start.sh --format hermes            # → {}
 ```
 
-`stale` в `--list` требует действия: повтори install для этого target и проверь,
-что статус стал `installed` (или `prepared` для Grok Bot). Для ready-bundle
+`stale` в `--list` требует действия: повтори установку для этой цели и проверь,
+что статус стал `installed` (или `prepared` для Grok Bot). Для готового комплекта
 `session-context` должен содержать `# Established project history` и полные
-тела dossiers; сообщение только с путём не считается успешной доставкой памяти.
+содержимое досье; сообщение только с путём не считается успешной доставкой памяти.
 
-Полный ad-hoc сьют — `docs/testing.md`.
+Полный набор отдельных проверок — [docs/testing.md](testing.md).

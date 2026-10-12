@@ -14,7 +14,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 REQUIRED = {
     ".claude-plugin/plugin.json",
-    ".claude-plugin/marketplace.json",
     "hooks/hooks.json",
     "hooks/artifact-stop.sh",
     "hooks/kimi-artifact-stop.sh",

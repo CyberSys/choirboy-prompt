@@ -86,7 +86,7 @@ else
 fi
 payload="$payload"$'\n'"$artifact_context"
 
-# Marketplace plugins receive a persistent data directory. Record only delivery
+# When the host supplies a persistent data directory, record only delivery
 # metadata there, never the lore itself, so a silent hook failure is observable.
 if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then
   mkdir -p "$CLAUDE_PLUGIN_DATA"

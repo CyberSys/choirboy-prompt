@@ -2,7 +2,7 @@
 
 # choirboy-prompt
 
-<h3>持久项目记忆与智能体自动编写的 artifacts</h3>
+<h3>持久项目记忆与智能体自动编写的项目资料</h3>
 
 <p>
 <strong>阅读其他语言版本</strong><br>
@@ -18,14 +18,14 @@
 </p>
 
 <p>
-choirboy-prompt 是面向生产的智能体记忆插件。它把既定项目历史、research、
-工作规则和已验证 dossiers 加载到所有受支持的运行时，让每个新会话从同一份
+choirboy-prompt 是面向生产环境的智能体记忆插件。它把既定项目历史、研究、
+工作规则和已验证的项目档案加载到受支持的运行时，让每个新会话从同一份
 项目记忆继续工作。
 </p>
 
 <p>
-所有面向模型的规范文件、research、lifecycle 指令、INDEX 与 dossiers 均只使用
-英文。只有用户文档提供 English、Русский 与简体中文三种本地化版本。
+所有面向模型的规范文件、研究、生命周期指令、INDEX 文件与项目档案均使用
+英文。只有用户文档提供英文、俄文与简体中文版本。
 </p>
 
 </div>
@@ -34,20 +34,20 @@ choirboy-prompt 是面向生产的智能体记忆插件。它把既定项目历�
 
 ## 工作原理
 
-1. **安装。** `./install.sh` 会找出机器上已安装的智能体，并在每个应用中
-   注册一个在新会话启动时触发的钩子。对于没有钩子的运行时，则写入会自动
-   同步的托管指令块；Grok Bot 会生成一个供手动导入的 workflow。
-2. **组装。** 固定 lore 由 `prompt.md`、`security-posture.md`、`lore.md`、
-   `user.md` 和 `context/research-index.md` 组成，外加已就绪的 dossiers。
-3. **投递。** Claude Code 与 Codex 的 SessionStart 只发送短状态。这些 harness
-   会截断或溢出过长的 hook 文本，因此状态里没有 lore，也没有
-   `choirboy-delivery` 标记。对话里还没有 `choirboy-context` 时，由
-   load-context skill 提供 lore。Kimi、OpenCode 和 Hermes 仍在能够接受的通道上
-   收到完整 plain payload。
-4. **项目 artifacts。** 随插件提供的 ready bundle 在仍与规范源一致时自动恢复。
-   只有用户明确要求更新 Choirboy 记忆时，智能体才编写或刷新 dossiers。Stop
-   不会为了强迫这件事而延续回合。
-5. **连续性。** 稳定的 user-data 存储、迁移和结构校验让项目记忆在升级后继续有效。
+1. **安装。** Linux 上的 `./install.sh` 或 Windows 上的 `install.ps1` 会找出
+   机器上的智能体应用，并为每个应用注册一个在新会话启动时触发的钩子。
+   对于没有钩子的运行时，会在指令文件中写入可同步的托管块；
+   对于 Grok Bot，则准备供手动导入的工作流。
+2. **组装。** 固定记忆由 `prompt.md`、`security-posture.md`、`lore.md`、
+   `user.md` 和 `context/research-index.md` 组成，另加已就绪且通过验证的项目档案。
+3. **投递。** Claude Code 与 Codex 的 SessionStart 钩子只发送简短状态。
+   这些运行环境会限制或转存过长的钩子输出，因此状态不包含项目记忆，也没有
+   `choirboy-delivery` 标记。对话中尚无记忆时，由 load-context 技能提供。
+   Kimi、OpenCode 和 Hermes 仍通过能够接收内容的通道获得完整的纯文本载荷。
+4. **项目资料。** 随插件提供的就绪资料包在仍与规范源一致时恢复。
+   只有用户明确要求更新 Choirboy 记忆时，智能体才编写或更新项目档案。
+   Stop 不会为了要求执行这项工作而延续回合。
+5. **连续性。** 稳定的用户数据存储、迁移和结构校验让同一份项目记忆在升级后继续有效。
 
 插件内部结构：[docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)。
 
@@ -55,18 +55,18 @@ choirboy-prompt 是面向生产的智能体记忆插件。它把既定项目历�
 
 | 运行时 | 写入位置 | 机制 |
 |---|---|---|
-| Claude Code CLI / Desktop Code | marketplace 或 `~/.claude/settings.json` | SessionStart 只给短状态；Stop 不延续回合；lore 由 load-context skill 提供 |
-| Claude Chat / Cowork | custom plugin | load-context skill（Chat 没有 SessionStart） |
+| Claude Code CLI / Desktop Code | `~/.claude/settings.json` | SessionStart 只发送简短状态；Stop 不延续回合；记忆从本地 load-context 技能加载 |
+| Claude Chat / Cowork | 自定义插件 | load-context 技能（Chat 没有 SessionStart） |
 | Codex | `~/.codex/hooks.json` | SessionStart 只给短状态；Stop 不延续回合（若 `~/.codex/config.toml` 中设置了 `hooks = false`，安装器会发出警告） |
-| OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | 插件把当前 lore 与 ready artifacts 加入每次模型请求的 system context，包括 compaction 之后 |
+| OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | 插件把当前记忆与就绪项目资料加入每次模型请求的系统上下文，包括上下文压缩之后 |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + 授权白名单，仅第一轮 |
-| Kimi Code 0.39.x | `~/.kimi-code/config.toml` | SessionStart/PreCompact 重置投递；UserPromptSubmit 输出已变化的 plain 上下文；Stop 不延续回合 |
-| Gemini | `~/.gemini/GEMINI.md` | 自动同步的 lifecycle 指令块 |
-| Grok Build | `~/.grok/AGENTS.md` | 自动同步的 lifecycle 指令块（钩子 stdout 会被忽略） |
-| Grok Bot | `~/.grokbot/choirboy-context/SKILL.md` | 供手动导入的 workflow；每个新对话运行 `@choirboy-context` |
-| Pi | `~/.pi/agent/APPEND_SYSTEM.md` | 与 Gemini 相同的指令合同，外加 `load-context` skill |
-| Oh My Pi (`omp`) | `~/.omp/agent/AGENTS.md` | 与 Gemini 相同的指令合同，外加 `load-context` skill |
-| llama-server UI | `~/.config/llama.cpp/choirboy-ui.json` | 默认 `systemMessage` 使用同一合同；启动时加 `--ui-config-file` |
+| Kimi Code 0.39.x | `~/.kimi-code/config.toml` | SessionStart/PreCompact 重置投递；UserPromptSubmit 输出已变化的纯文本上下文；Stop 不延续回合 |
+| Gemini | `~/.gemini/GEMINI.md` | 可同步的生命周期指令块 |
+| Grok Build | `~/.grok/AGENTS.md` | 可同步的生命周期指令块（钩子 stdout 会被忽略） |
+| Grok Bot | `~/.grokbot/choirboy-context/SKILL.md` | 供手动导入的工作流；每个新对话运行 `@choirboy-context` |
+| Pi | `~/.pi/agent/APPEND_SYSTEM.md` | 与 Gemini 相同的指令契约，外加 `load-context` 技能 |
+| Oh My Pi (`omp`) | `~/.omp/agent/AGENTS.md` | 与 Gemini 相同的指令契约，外加 `load-context` 技能 |
+| llama-server UI | `~/.config/llama.cpp/choirboy-ui.json` | 默认 `systemMessage` 使用同一契约；启动时传入 `--ui-config-file` |
 
 ## 安装
 
@@ -80,7 +80,7 @@ cd choirboy-prompt
 ./install.sh
 ```
 
-完成。打开一个**新**会话。Claude Code 和 Codex 会看到短状态，lore 由 load-context skill 加载。Kimi、OpenCode 和 Hermes 收到完整 plain payload。
+完成。打开一个**新**会话。Claude Code 和 Codex 会显示简短的记忆状态，并通过 load-context 技能加载记忆。Kimi、OpenCode 和 Hermes 收到完整的纯文本载荷。
 
 - 只安装到指定应用：`./install.sh --target claude,codex`
 - 查看各运行时状态：`./install.sh --list`（`stale` 表示托管注册需要同步）
@@ -89,7 +89,7 @@ cd choirboy-prompt
 
 ### Windows（任意 PowerShell）
 
-需要 Python 3。Git 只用于克隆仓库。Windows 上注册的是 PowerShell hooks，不需要 Git Bash。在系统自带的 Windows PowerShell 或 PowerShell 7 中运行：
+需要 Python 3。Git 只用于克隆仓库。Windows 上注册的是 PowerShell 钩子，不需要 Git Bash。在系统自带的 Windows PowerShell 或 PowerShell 7 中运行：
 
 ```powershell
 git clone https://github.com/howdeploy/choirboy-prompt.git
@@ -98,10 +98,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 `install.ps1` 可以在任意 PowerShell 中启动，包括 Windows 自带的 Windows
-PowerShell 5.1。hooks 需要 PowerShell 7（`pwsh`）。如果没有安装，安装器会
-自动安装：先用 `winget`，失败时改用 PowerShell GitHub releases 中由 Microsoft
+PowerShell 5.1。钩子需要 PowerShell 7（`pwsh`）。如果没有安装，安装器会
+自动安装：先用 `winget`，失败时改用 PowerShell GitHub 发布页中由 Microsoft
 签名的 MSI（Windows 会请求管理员确认）。首次安装后，请重启已打开的终端和
-agent 应用，让它们找到 `pwsh`。`-ExecutionPolicy Bypass` 只作用于这一次运行，
+智能体应用，让它们找到 `pwsh`。`-ExecutionPolicy Bypass` 只作用于这一次运行，
 不会修改系统策略。
 
 安装器使用克隆仓库中的 Python 辅助脚本和上下文文件，因此请在仓库目录中运行。
@@ -110,22 +110,22 @@ agent 应用，让它们找到 `pwsh`。`-ExecutionPolicy Bypass` 只作用于�
 - 查看各运行时状态：`powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 --list`
 - 回滚：`powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 --uninstall`
 
-项目 artifacts 存放在手动 checkout 之外，路径优先级为：
+项目资料存放在手动安装的工作副本之外，路径优先级为：
 `CHOIRBOY_ARTIFACTS_DIR` → `${CLAUDE_PLUGIN_DATA}/project-artifacts` →
 `${XDG_DATA_HOME}/choirboy-prompt/project-artifacts` →
 `~/.local/share/choirboy-prompt/project-artifacts`。重新运行安装器会同步
-自有注册；若稳定 root 为空，还会从旧 checkout 迁移作者 bundle，且不覆盖
-已有内容。私有 migration 记录可恢复中断的 bundle 复制，避免 lifecycle
-看到不完整的 INDEX/manifest/dossiers 集合。
+插件管理的注册；若稳定根目录为空，还会从旧工作副本迁移已编写的资料包，
+且不覆盖已有内容。内部迁移记录可恢复中断的复制，避免生命周期处理过程
+读取到不完整的 INDEX、清单与项目档案集合。
 
-特殊情况——Grok Bot 手动导入 workflow、通过 Claude marketplace /
-Desktop / Chat / Cowork 安装、Windows 与 WSL——见
-[docs/installer.zh-CN.md](docs/installer.zh-CN.md)。**不要同时**使用
-marketplace 插件和 `./install.sh --target claude`：lore 会加载两次。
+特殊情况——Grok Bot 手动导入工作流、直接注册 Claude Code 钩子、
+Chat / Cowork 自定义插件、Windows 与 WSL——见
+[docs/installer.zh-CN.md](docs/installer.zh-CN.md)。要在 Claude Code 中加载完整记忆，
+请让智能体读取此工作副本中的 `skills/load-context/SKILL.md`。
 
 ## 填写你自己的文件
 
-仓库附带一套规范 lore。部署到自己的项目时，请**直接在克隆里**把它替换为
+仓库附带一套规范记忆。部署到自己的项目时，请**直接在克隆里**把它替换为
 经过核验的项目记忆：`install.sh` 指向工作副本，修改会在下一次会话生效。
 不需要 fork 或复制任何东西。
 
@@ -136,7 +136,7 @@ marketplace 插件和 `./install.sh --target claude`：lore 会加载两次。
 | `user.md` | 只写稳定的协作偏好 |
 | `lore.md` | 真实项目、决策、结果与教训 |
 | `research/NN-topic.md` | 每个决策一份：问题、证据、方案、决策、风险、重新评估条件 |
-| `context/research-index.md` | 每份 research 一行 |
+| `context/research-index.md` | 每份研究文档一行 |
 
 操作顺序：
 
@@ -144,12 +144,12 @@ marketplace 插件和 `./install.sh --target claude`：lore 会加载两次。
 2. 每个决策一份 `research/NN-topic.md`，并在索引中加一行。
 3. 重新构建并验证：`python3 scripts/build-context.py && bash scripts/test.sh`。
 
-完整指南（含模板与 quality gate）：[docs/authoring.zh-CN.md](docs/authoring.zh-CN.md)。
+包含模板和必需质量检查的完整指南：[docs/authoring.zh-CN.md](docs/authoring.zh-CN.md)。
 
 ## 为什么存在
 
 普通的新智能体会话不会自动拥有项目的全部操作历史。反复解释既浪费时间，
-也容易产生偏差。该插件把仓库中的规范 lore 与智能体编写的 dossiers 转换为
+也容易产生偏差。该插件把仓库中的规范记忆与智能体编写的项目档案转换为
 所有受支持运行时自动加载、严格验证的记忆层。安装、迁移、诊断与回滚均保持
 明确且可复现。
 
@@ -157,33 +157,33 @@ marketplace 插件和 `./install.sh --target claude`：lore 会加载两次。
 
 | 文档 | 内容 |
 |---|---|
-| [编写自己的记忆](docs/authoring.zh-CN.md) | Lore 与 research 的强制流程和模板 |
-| [架构](docs/architecture.zh-CN.md) | 仓库结构、payload 解剖、格式、Hermes 协议 |
+| [编写自己的记忆](docs/authoring.zh-CN.md) | 项目历史与研究的必需流程和模板 |
+| [架构](docs/architecture.zh-CN.md) | 仓库结构、载荷组成、格式、Hermes 协议 |
 | [安装器](docs/installer.zh-CN.md) | 所有安装路径、目标、标记、备份、边界情况 |
-| [故障排除](docs/troubleshooting.zh-CN.md) | 投递诊断、delivery marker、Windows/SSH/Cloud/WSL |
+| [故障排除](docs/troubleshooting.zh-CN.md) | 投递诊断、投递标记、Windows/SSH/Cloud/WSL |
 | [安全与披露](docs/security.zh-CN.md) | 安全框架、发布前清理清单、负责任披露 |
 | [测试](docs/testing.zh-CN.md) | 钩子与安装器检查、临时测试套件 |
 
 ## 已知限制
 
-- Grok Bot：需要一次性导入 workflow，并在每个新对话中显式运行
+- Grok Bot：需要一次性导入工作流，并在每个新对话中显式运行
   `@choirboy-context`。
-- Gemini、Grok Build 与 `--instructions` 没有原生 delivery hook；其托管
-  指令块会要求智能体运行 lifecycle 命令。正常重新运行安装器即可同步该块，
-  不需要先 uninstall 再 install。
-- Hermes 第一轮去重用的是 `/tmp` 中的 state 文件，没有锁；并行启动
+- Gemini、Grok Build 与 `--instructions` 没有原生投递钩子；其托管
+  指令块会要求智能体运行生命周期命令。正常重新运行安装器即可同步该块，
+  不需要先卸载再安装。
+- Hermes 第一轮去重使用 `/tmp` 中的状态文件，没有锁；并行启动
   可能产生竞争。
-- Claude Chat 不执行 SessionStart——那里由 skill 手动加载 lore；
+- Claude Chat 不执行 SessionStart——那里由技能手动加载记忆；
   Cloud/WSL/SSH 的细节见[故障排除](docs/troubleshooting.zh-CN.md)。
 
 ---
 
-## License
+## 许可证
 
 MIT。见 [LICENSE](LICENSE)。
 
 ---
 
 <div align="center">
-<strong>Innocent as a choirboy.</strong>
+<strong>纯真如唱诗班少年。</strong>
 </div>

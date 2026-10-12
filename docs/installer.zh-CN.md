@@ -4,55 +4,47 @@
 
 ---
 
-## 0. 安装 Claude plugin
+## 0. 配置 Claude
 
-本仓库通过 `.claude-plugin/marketplace.json` 充当带版本的 Claude
-marketplace。安装包同时包含 Claude Code `SessionStart`、`Stop` 钩子和可在
-Chat/Cowork 中使用的 skills。
+### 0.1. Claude Code CLI / 本地 Desktop Code
 
-### 0.1. Claude Code CLI
+在仓库工作副本中运行安装器，将钩子直接注册到 Claude 设置：
 
-```text
-/plugin marketplace add howdeploy/choirboy-prompt
-/plugin install choirboy-prompt@choirboy-prompt
+```bash
+./install.sh --target claude
 ```
 
-安装后启动新会话。通过 CLI 更新或删除：
+Windows 上运行：
 
-```text
-/plugin marketplace update choirboy-prompt
-/plugin update choirboy-prompt@choirboy-prompt
-/plugin uninstall choirboy-prompt@choirboy-prompt
-/plugin marketplace remove choirboy-prompt
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 --target claude
 ```
 
-### 0.2. Claude Desktop Code
+安装器将 SessionStart 和 Stop 注册到 `~/.claude/settings.json`
+（或通过 `--settings` / `--project` 选择的路径）。安装后开启新会话。
+SessionStart 发送简短状态；要加载完整记忆，请让智能体读取此工作副本中的
+`skills/load-context/SKILL.md`。钩子状态也会给出该本地源文件路径。
+更新直接读取工作副本。移动工作副本后重新运行安装器；使用
+`--uninstall --target claude` 删除注册。
 
-Desktop 不提供终端式 `/plugin` 对话框。前往 **Customize → Plugins →
-Personal plugins → + → Add marketplace**，添加
-`https://github.com/howdeploy/choirboy-prompt`。然后在本地 Code 会话中选择
-**+ → Plugins → Add plugin → choirboy-prompt**，并启动一个新会话。
-
-Marketplace cache 提供 `${CLAUDE_PLUGIN_ROOT}`。`hooks/hooks.json` 使用官方
-exec form（`command: bash`，路径作为独立 `args` 元素），因此路径中的空格与
-shell 元字符不会被重新分词。15 秒超时避免卡住会话启动。
-
-### 0.3. Claude Chat 与 Cowork
+### 0.2. Claude Chat 与 Cowork
 
 在 **Customize → Plugins** 中安装仓库，或上传
-`python3 scripts/package-plugin.py` 生成的 ZIP。Chat 不运行 `SessionStart`，
-请调用 **load-context** skill。Cowork 在支持时运行钩子，并用同一 skill
-回退。**diagnose** skill 通过 `choirboy-delivery` marker 验证投递，而不是
-依赖模型的措辞。
+`python3 scripts/package-plugin.py` 生成的 ZIP。Chat 不运行 SessionStart，
+请调用 **load-context** 技能。Cowork 在支持时运行钩子，并用技能回退。
+**diagnose** 技能通过 `choirboy-delivery` 标记验证投递，不依赖模型措辞。
 
-### 0.4. 边界
+自定义插件包保留 `.claude-plugin/plugin.json` 和 `hooks/hooks.json`。
+其钩子使用 `command: bash`、`args` 中的一个路径及 15 秒超时；
+宿主提供 `${CLAUDE_PLUGIN_ROOT}`。
 
-- 自动钩子需要 `bash`，skill 不需要；
-- Cloud Code 需要项目 `enabledPlugins`，不会继承本地 Desktop 安装；
-- Desktop WSL 不支持 plugins，SSH hooks 同步目前也不可靠，请使用 skill；
-- 不要同时启用 marketplace 插件和 `./install.sh --target claude`，否则会加载两次；
-- 发布时必须同步提升 manifest 与 marketplace 版本，然后运行
-  `python3 scripts/build-context.py` 和测试套件。
+### 0.3. 边界
+
+- 自定义插件钩子需要 `bash`，技能回退不需要。
+- Windows 手动安装使用 PowerShell 钩子。
+- 通过 SSH、WSL 或 Cloud 使用 Code 时，应在智能体运行环境中注册钩子；
+  本地主机设置不会在远程环境中完成安装。
+- 发布前更新 `plugin.json`，重新生成上下文并验证软件包。
 
 ---
 
@@ -67,25 +59,25 @@ shell 元字符不会被重新分词。15 秒超时避免卡住会话启动。
 
 | 模式 | 作用 |
 |---|---|
-| install（默认） | 注册钩子/块并准备 artifact request |
-| `--uninstall` | 删除注册，但保留智能体创建的 artifacts |
+| install（默认） | 注册钩子/指令块并准备项目资料请求 |
+| `--uninstall` | 删除注册，但保留智能体编写的项目资料 |
 | `--list` | 只读显示：`absent` / `detected` / `stale` / `installed`（Grok Bot 为 `prepared`） |
 
 `install.sh` 需要 `python3` 进行 JSON 操作。钩子的 `claude` 和 `plain`
 格式只依赖 Bash，不需要 `jq`/`python3`；`hermes` 格式需要其中一个 JSON
-解析器。自动 artifact lifecycle 需要 `python3`：安装阶段只准备元数据，下一次
-会话由当前智能体编写 dossiers 并通过 validator；request 与 validator 要求
-INDEX 和 dossiers 使用英文。Artifact 存储在 checkout
-变化后仍保持稳定，路径优先级为：`CHOIRBOY_ARTIFACTS_DIR` →
+解析器。自动项目资料生命周期需要 `python3`：安装阶段只准备元数据，下一次
+会话会要求当前智能体编写项目档案并通过验证器。资料存储在工作副本
+变化后仍保持稳定。请求与验证器要求 INDEX 和项目档案使用英文。
+路径优先级为：`CHOIRBOY_ARTIFACTS_DIR` →
 `${CLAUDE_PLUGIN_DATA}/project-artifacts` →
 `${XDG_DATA_HOME}/choirboy-prompt/project-artifacts` →
 `~/.local/share/choirboy-prompt/project-artifacts`。
 
-重写注册前，安装器会检查当前与旧 hook 路径，以及当前 checkout 的
-`artifacts/`。仅当稳定 root 中尚无智能体创作的 payload 时，才会把找到的
-第一份 INDEX/manifest/dossier bundle 复制过去。现有稳定 artifacts 永不被
-覆盖，卸载也会保留它们。Ready bundle 会被完整重新校验并内联到 hook
-context；运行时不会只收到 INDEX 路径。
+重写注册前，安装器会检查当前与旧钩子路径，以及当前工作副本的
+`artifacts/`。仅当稳定根目录中尚无智能体编写的内容时，才会把找到的
+第一份旧 INDEX、清单与项目档案资料包复制过去。现有稳定资料不会被覆盖，
+卸载也会保留它们。就绪资料包会被完整重新校验，并内联到钩子上下文；
+运行时不会只收到 INDEX 路径。
 
 ---
 
@@ -118,16 +110,16 @@ grokbot) command -v grokbot >/dev/null 2>&1 || command -v grok-bot >/dev/null 2>
 |---|---|---|
 | claude | `~/.claude/settings.json`（或 `--settings`/`--project`） | JSON 钩子 `SessionStart` + `Stop` |
 | codex | `~/.codex/hooks.json` | JSON 钩子 `SessionStart` + `Stop` |
-| opencode | `~/.config/opencode/plugins/agent-plugin.ts` | 模型侧 system-context transform |
+| opencode | `~/.config/opencode/plugins/agent-plugin.ts` | 模型系统上下文转换 |
 | hermes | `~/.hermes/config.yaml` | 带标记的 `hooks.pre_llm_call` 块 + 授权白名单 |
-| kimi | `${KIMI_CODE_HOME:-~/.kimi-code}/config.toml` | 带标记的 SessionStart + PreCompact + UserPromptSubmit + Stop hooks |
-| gemini | `~/.gemini/GEMINI.md` | 带标记的 HTML lifecycle 指令块 |
-| grok | `~/.grok/AGENTS.md` | 带标记的 HTML lifecycle 指令块（Grok Build 全局规则） |
-| grokbot | `~/.grokbot/choirboy-context/SKILL.md` | 准备好的可导入 workflow（不自动加载） |
+| kimi | `${KIMI_CODE_HOME:-~/.kimi-code}/config.toml` | 带标记的 SessionStart + PreCompact + UserPromptSubmit + Stop 钩子 |
+| gemini | `~/.gemini/GEMINI.md` | 带 HTML 标记的生命周期指令块 |
+| grok | `~/.grok/AGENTS.md` | 带 HTML 标记的生命周期指令块（Grok Build 全局规则） |
+| grokbot | `~/.grokbot/choirboy-context/SKILL.md` | 准备好的可导入工作流（不自动加载） |
 | pi | `~/.pi/agent/APPEND_SYSTEM.md` | 指令块加 `skills/load-context` 符号链接 |
 | omp | `~/.omp/agent/AGENTS.md` | 指令块加 `skills/load-context` 符号链接 |
-| llama | `~/.config/llama.cpp/choirboy-ui.json` | UI `systemMessage` 加 skill 符号链接 |
-| `--instructions FILE` | 任意文件 | 带标记的 lifecycle 指令块（HTML 或 `#`） |
+| llama | `~/.config/llama.cpp/choirboy-ui.json` | 界面 `systemMessage` 加技能符号链接 |
+| `--instructions FILE` | 任意文件 | 带标记的生命周期指令块（HTML 或 `#`） |
 
 ---
 
@@ -137,8 +129,8 @@ grokbot) command -v grokbot >/dev/null 2>&1 || command -v grok-bot >/dev/null 2>
 
 所有块都带 `MARK="agent-plugin:vibe-lore"`。标记形式：
 
-- hash 风格（配置文件、TOML）：`# >>> agent-plugin:vibe-lore >>>` / `# <<< agent-plugin:vibe-lore <<<`
-- html 风格（markdown 指令）：`<!-- agent-plugin:vibe-lore START -->` / `<!-- agent-plugin:vibe-lore END -->`
+- 井号风格（配置文件、TOML）：`# >>> agent-plugin:vibe-lore >>>` / `# <<< agent-plugin:vibe-lore <<<`
+- HTML 风格（Markdown 指令）：`<!-- agent-plugin:vibe-lore START -->` / `<!-- agent-plugin:vibe-lore END -->`
 
 标记既是所有权标识，也是删除时的块边界。当前生成的块还包含
 `agent-plugin:vibe-lore:registration=2`；`--list` 结合该修订号与精确脚本
@@ -147,22 +139,20 @@ grokbot) command -v grokbot >/dev/null 2>&1 || command -v grok-bot >/dev/null 2>
 ### 3.2. 幂等性
 
 - `block_sync` 会追加缺失的托管块，或把唯一完整 START/END 块原子替换为
-  当前生成文本。周围用户内容保持不变；损坏、重复或嵌套 marker 会被拒绝。
+  当前生成文本。周围用户内容保持不变；损坏、重复或嵌套标记 会被拒绝。
 - `json_hook` 按脚本名（命令中的 `session-start.sh` 或 `artifact-stop.sh`）匹配条目，而不是绝对路径：如果插件文件夹移动了，过期的注册会被替换，而不是叠加。
-- Marketplace 钩子位于 plugin cache，不会写入 `settings.json` 的钩子数组。
-  因此 marketplace 和手动 Claude 钩子是二选一的安装路径，不能同时启用。
 - OpenCode 目标拥有一个完整的带标记插件文件。内容相同时重复安装不做
   修改；更新会先备份，再原子替换。
-- Hermes consent 条目、Kimi 的四个 hook、Gemini/Grok 指令块以及任意
+- Hermes 授权条目、Kimi 的四个钩子、Gemini/Grok 指令块以及任意
   `--instructions` 块都会在每次安装器运行时同步；旧绝对路径和旧注册
   修订号会原地升级。
 
 ### 3.3. 托管块升级
 
-旧的 skip-only 行为已经移除。重新运行 install 时，如果脚本路径、lifecycle
+旧的仅跳过已有块的行为已移除。重新运行安装时，如果脚本路径、生命周期
 文本或注册修订号发生变化，安装器会重新生成并替换自己的块，并先创建
-timestamp 备份。若自有注册存在但不是当前精确版本，`--list` 会显示
-`stale`。正常运行 install 即可同步，不需要 uninstall/install 循环。
+时间戳备份。若自有注册存在但不是当前精确版本，`--list` 会显示
+`stale`。正常运行安装即可同步，不需要先卸载再安装。
 
 ---
 
@@ -189,18 +179,18 @@ backup() {
 |---|---|---|
 | `target_present` | 运行时检测 | 二进制或配置目录 |
 | `claude_settings_file` | 写 Claude 钩子的位置 | `--settings` > `--project` > `~/.claude/settings.json` |
-| `target_installed` | 精确的当前安装？ | 按目标检查修订号、路径与 hooks |
-| `target_managed_present` | 是否存在旧的自有安装？ | ownership marker/script ids；产生 `stale` |
+| `target_installed` | 精确的当前安装？ | 按目标检查修订号、路径与钩子 |
+| `target_managed_present` | 是否存在旧的自有安装？ | 所有权标记和脚本标识符；产生 `stale` |
 | `backup` | 修改前备份 | `cp -p` 带时间戳 |
 | `block_sync` | 添加或升级带标记的块 | 精确替换 START/END，原子写入 |
 | `block_remove` | 删除带标记的块 | 按 START/END，清理尾部空行 |
 | `json_hook` | 写入 Claude 风格 JSON 的钩子 | 按脚本名匹配，`is_ours()`/`has_exact()` |
-| `opencode_plugin` | 管理 OpenCode 适配器 | 标记 guard、原子替换、时间戳备份 |
-| `hermes_allowlist` | Hermes 授权白名单 | 精确的 (event, command) 对 |
-| `instruction_block` | Lifecycle 指令文本 | HTML 或 `#` 注释 |
-| `grokbot_workflow` | 管理 Grok Bot workflow 文件 | `install`/`uninstall`/`status`，标记 guard |
-| `discover_legacy_artifact_roots` | 查找旧 checkout-local bundle | 检查旧托管绝对路径 |
-| `do_claude` / `do_codex` / `do_opencode` / `do_hermes` / `do_kimi` / `do_gemini` / `do_grok` / `do_grokbot` | 目标安装 | 每目标逻辑 |
+| `opencode_plugin` | 管理 OpenCode 适配器 | 标记保护、原子替换、时间戳备份 |
+| `hermes_allowlist` | Hermes 授权白名单 | 精确的（事件、命令）对 |
+| `instruction_block` | 生命周期指令文本 | HTML 或 `#` 注释 |
+| `grokbot_workflow` | 管理 Grok Bot 工作流文件 | `install`/`uninstall`/`status`，标记保护 |
+| `discover_legacy_artifact_roots` | 查找旧工作副本内的资料包 | 检查旧托管绝对路径 |
+| `do_claude` / `do_codex` / `do_opencode` / `do_hermes` / `do_kimi` / `do_gemini` / `do_grok` / `do_grokbot` | 目标安装 | 各目标专用逻辑 |
 | `do_instructions` | 安装到任意文件 | 按扩展名定风格 |
 
 ### 5.1. `json_hook` — 细节
@@ -214,10 +204,10 @@ def is_ours(entry):
                for h in entry.get("hooks", []))
 ```
 
-- install：删除过期注册并添加精确 handler。Claude 使用 `command: bash`、一个
-  `args` 路径和 `timeout: 15`；Codex 保留带引用路径的字符串命令，并设置
-  `additionalContextLimit: 4000`，只为短 SessionStart 状态留出余量。完整 lore 不通过该 hook 发送。
-- uninstall：删除所有 `is_ours()` 条目。
+- 安装：删除因目录移动而过期的脚本注册，并在缺失时添加精确的处理器。Claude 使用 `command: bash`、一个
+  `args` 路径和 `timeout: 15`；Codex 保留带引号的命令，并设置
+  `additionalContextLimit: 4000`，以免简短的 SessionStart 状态被转存到外部。固定记忆不通过此钩子发送。
+- 卸载：删除所有 `is_ours()` 条目。
 - 无效 JSON 不会被替换；实际变化会先备份，再原子写入。
 
 ### 5.2. `hermes_allowlist` — 细节
@@ -228,27 +218,27 @@ Hermes 要求对 shell 钩子显式同意：`~/.hermes/shell-hooks-allowlist.jso
 
 处理文本配置（config.yaml、config.toml、GEMINI.md）：
 
-- sync：块不存在时追加；否则只替换一个完整 START/END 范围，并保留周围
+- 同步：块不存在时追加；否则只替换一个完整 START/END 范围，并保留周围
   所有内容。文本完全相同时不修改。
-- safety：损坏、重复或嵌套 marker 会中止安装，而不是猜测 ownership。
+- 安全：损坏、重复或嵌套标记 会中止安装，而不是猜测所有权。
   实际更新会先备份，再原子写入。
-- remove：从 START 到 END 包含地切除，如果 add 留下了一个前导空行则一并移除。
+- 删除：删除从 START 到 END 的整个范围，包括边界；若添加时留下一个前导空行，也一并移除。
 
-### 5.4. Kimi 0.39.x lifecycle hooks
+### 5.4. Kimi 0.39.x 生命周期钩子
 
-Kimi 0.39.x 会丢弃 `SessionStart` stdout，因此托管 TOML 块安装四个 hook：
+Kimi 0.39.x 会丢弃 `SessionStart` stdout，因此托管 TOML 块安装四个钩子：
 
-- `SessionStart`（`startup|resume`）准备 artifact 状态并重置
-  投递 fingerprint；
-- `PreCompact`（`manual|auto`）在 compaction 前同步重置 fingerprint；
-- `UserPromptSubmit` 执行规范 plain 投递，重复 pending bootstrap，或在
-  fingerprint 变化时输出 ready bundle；
-- 验证仍为 pending 时，`Stop` 把 continuation request 写入 stderr 并以代码 2
+- `SessionStart`（`startup|resume`）准备项目资料状态并重置
+  投递指纹；
+- `PreCompact`（`manual|auto`）在上下文压缩前同步重置指纹；
+- `UserPromptSubmit` 执行规范纯文本投递，重复待处理的初始准备请求，或在
+  指纹变化时输出就绪资料包；
+- 验证仍待处理时，`Stop` 把继续执行请求 写入 stderr 并以代码 2
   退出；达到 `ready` 后以代码 0 退出。
 
-除非由 `CHOIRBOY_STATE_DIR` 覆盖，state marker 位于
+除非由 `CHOIRBOY_STATE_DIR` 覆盖，状态标记位于
 `${KIMI_CODE_HOME:-~/.kimi-code}/choirboy-prompt/hook-state`。只有 stdout
-成功输出后才记录规范化的 ready fingerprint。
+成功输出后才记录规范化的就绪指纹。
 
 ---
 
@@ -258,23 +248,23 @@ Kimi 0.39.x 会丢弃 `SessionStart` stdout，因此托管 TOML 块安装四个 
 2. **Kimi 配置中已有 `hooks =`。** 同样：die 并提示切换到 `[[hooks]]`。
 3. **Codex：钩子被禁用。** 在 `~/.codex/config.toml` 中发现 `hooks = false` → 警告（不阻塞）。
 4. **文件不存在。** `mkdir -p` + 创建空 `{}`/空文件。
-5. **插件文件夹移动了。** JSON hook 按脚本名匹配，托管文本块也会同步；
+5. **插件文件夹移动了。** JSON 钩子按脚本名匹配，托管文本块也会同步；
    旧绝对路径会被替换，不会重复。
 6. **重复运行或升级。** 当前注册不修改；旧的自有注册显示为 `stale`，
-   通过正常 install 原地升级。
+   通过正常安装原地升级。
 7. **没有安装就 `--uninstall`。** `no block in file — skipped`，不会失败。
-8. **`--target none` + `--instructions`。** 只有托管 lifecycle 指令块，
-   没有 runtime-specific hook。
-9. **Hermes 并行启动。** `/tmp` 中的 state 文件没有锁——可能产生竞争（已知限制，见 README）。
-10. **受管理路径已有外部 OpenCode 插件。** 若文件没有 ownership 标记，
-    install 与 uninstall 都会拒绝覆盖或删除。
+8. **`--target none` + `--instructions`。** 只有托管生命周期指令块，
+   没有针对具体运行时的钩子。
+9. **Hermes 并行启动。** `/tmp` 中的 状态文件没有锁——可能产生竞争（已知限制，见 README）。
+10. **受管理路径已有外部 OpenCode 插件。** 若文件没有所有权标记，
+    安装与卸载都会拒绝覆盖或删除。
 11. **Windows 上没有 PowerShell 7。** 根目录的 `install.ps1` 是引导脚本，
     可在任意 PowerShell（包括 Windows PowerShell 5.1）中运行。它在 `PATH`
     和标准安装位置查找 `pwsh` 7；找不到时先用 `winget` 安装
-    `Microsoft.PowerShell`，失败后改用 PowerShell GitHub releases 中由
-    Microsoft 签名的 MSI（校验 checksum 与 Authenticode 签名，Windows 会请求
+    `Microsoft.PowerShell`，失败后改用 PowerShell GitHub 发布页中由
+    Microsoft 签名的 MSI（验证校验和与 Authenticode 签名，Windows 会请求
     管理员确认）。随后在 `pwsh` 下运行 `scripts/install-core.ps1`。已注册的
-    hooks 从 `PATH` 调用 `pwsh`，因此首次安装之前打开的终端和 agent 应用需要重启。
+    钩子从 `PATH` 调用 `pwsh`，因此首次安装之前打开的终端和智能体应用需要重启。
 
 ---
 
@@ -293,9 +283,9 @@ echo '{"session_id":"hook-check","extra":{"is_first_turn":false}}' \
   | bash hooks/session-start.sh --format hermes            # → {}
 ```
 
-`--list` 中的 `stale` 需要处理：对该 target 重新运行 install，并确认状态变为
-`installed`（Grok Bot 为 `prepared`）。Ready artifact bundle 的
-`session-context` 必须包含 `# Established project history` 与完整 dossier
+`--list` 中的 `stale` 需要处理：对该目标重新运行安装，并确认状态变为
+`installed`（Grok Bot 为 `prepared`）。就绪项目资料包的
+`session-context` 必须包含 `# Established project history` 与完整项目档案
 正文；只有路径的消息不算成功投递记忆。
 
 完整的临时测试套件——[docs/testing.zh-CN.md](testing.zh-CN.md)。

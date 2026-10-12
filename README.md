@@ -61,7 +61,7 @@ Plugin internals: [docs/architecture.en.md](docs/architecture.en.md).
 
 | Runtime | Where it goes | Mechanics |
 |---|---|---|
-| Claude Code CLI / Desktop Code | marketplace or `~/.claude/settings.json` | short SessionStart status; Stop does not continue the turn; load-context skill carries the lore |
+| Claude Code CLI / Desktop Code | `~/.claude/settings.json` | short SessionStart status; Stop does not continue the turn; read the local load-context skill for the lore |
 | Claude Chat / Cowork | custom plugin | load-context skill (Chat has no SessionStart) |
 | Codex | `~/.codex/hooks.json` | short SessionStart status; Stop does not continue the turn (the installer warns if `hooks = false` is set in `~/.codex/config.toml`) |
 | OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | plugin appends current lore and ready artifacts to every model-bound system context, including after compaction |
@@ -127,11 +127,10 @@ an authored bundle from an older checkout without overwriting it. A private
 migration record makes an interrupted bundle copy resume instead of exposing a
 partial INDEX/manifest/dossier set.
 
-Special cases — manual workflow import for Grok Bot, install via Claude
-marketplace / Desktop / Chat / Cowork, Windows and WSL — are covered in
-[docs/installer.en.md](docs/installer.en.md). **Do not combine** the
-marketplace plugin with `./install.sh --target claude`: the lore would be
-loaded twice.
+Special cases — manual workflow import for Grok Bot, direct Claude Code hook
+registration, custom plugins for Chat / Cowork, Windows and WSL — are covered
+in [docs/installer.en.md](docs/installer.en.md). For the full lore in Claude Code,
+ask the agent to read `skills/load-context/SKILL.md` from this checkout.
 
 ## Fill in your own files
 

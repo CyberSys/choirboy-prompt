@@ -1,98 +1,92 @@
-# Troubleshooting
+# Устранение неполадок
 
 Диагностируй отдельно регистрацию, исполнение, доставку и поведение модели.
 Фраза Claude «я прочитал контекст» не доказывает запуск `SessionStart`.
 
-## Матрица интерфейсов
+## Матрица сред
 
-| Интерфейс | Установка | Основная доставка | Fallback / ограничение |
+| Интерфейс | Установка | Основная доставка | Резервный вариант / ограничение |
 |---|---|---|---|
-| Claude Code CLI | marketplace через `/plugin` | автоматический `SessionStart` | `/choirboy-prompt:load-context` |
-| Desktop Code local | графический Plugin Manager | автоматический `SessionStart` | skill load-context |
-| Claude Chat | custom plugin | skill load-context | Chat не исполняет hooks |
-| Claude Cowork | custom plugin | hook где доступен | skill load-context; runtime может потерять stdout |
-| Desktop Code SSH | графический Plugin Manager | hook после синхронизации | текущий SSH sync может пропустить `hooks/` |
-| Desktop Code Cloud | project plugin settings | автоматический hook | локальные Desktop plugins не наследуются |
-| Desktop Code WSL | — | — | Desktop plugins недоступны |
+| Claude Code CLI | `install.sh --target claude` или `install.ps1 --target claude` | автоматический статус `SessionStart` | попроси агента прочитать локальный `skills/load-context/SKILL.md` |
+| Desktop Code local | прямая регистрация хуков в `settings.json` | автоматический статус `SessionStart` | попроси агента прочитать локальный `skills/load-context/SKILL.md` |
+| Claude Chat | пользовательский плагин | навык load-context | Chat не исполняет хуки |
+| Claude Cowork | пользовательский плагин | хук при наличии поддержки | навык load-context; среда исполнения хука может потерять вывод |
+| Desktop Code SSH / Cloud / WSL | регистрация хуков в среде исполнения | статус `SessionStart` при поддержке хуков | рабочая копия и среда исполнения хуков должны быть доступны там |
 
 ## Четыре стадии диагностики
 
-1. **Регистрация:** Plugin Manager показывает включённый `choirboy-prompt`
-   актуальной версии.
-2. **Исполнение:** marketplace-hook создаёт
-   `${CLAUDE_PLUGIN_DATA}/latest-delivery.log` с версией, hash и nonce.
-3. **Доставка:** `/choirboy-prompt:diagnose` находит `choirboy-delivery` рядом с
-   блоком `choirboy-context`.
+1. **Регистрация:** `./install.sh --list` показывает для Claude статус
+   `installed`, а нужный `settings.json` ссылается на текущую рабочую копию.
+   Для Chat/Cowork проверь, что пользовательский плагин включён.
+2. **Исполнение:** сессия получает короткий статус «Choirboy memory status».
+   Если хост задаёт `CLAUDE_PLUGIN_DATA`, Bash-хук также записывает версию,
+   хеш и nonce в `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`.
+3. **Доставка:** попроси агента Claude Code прочитать локальный
+   `skills/load-context/SKILL.md`, затем `skills/diagnose/SKILL.md` для проверки
+   маркера `choirboy-delivery` рядом с `choirboy-context`. В Chat/Cowork
+   выбери навыки **load-context** и **diagnose**.
 4. **Поведение:** только после первых трёх стадий исследуй принятие моделью,
-   конфликт инструкций или memory.
+   конфликт инструкций или память.
 
 Значения `delivery`:
 
-- `session-start` — stdout хука дошёл до модели;
-- `skill` — лор доставил fallback load-context.
+- `session-start` — полный текстовый контекст (Kimi, OpenCode, Hermes) дошёл до модели. SessionStart у Claude Code и Codex не выдаёт этот маркер: он выдаёт короткий статус;
+- `skill` — память доставил резервный навык load-context. Короткий статус не является этим маркером.
 
-## Частые отказы
+## Частые неполадки
 
-### `/plugin` недоступен в Desktop
+### Claude Code не получает статус
 
-Это ожидаемо: Desktop не показывает терминальный plugin-dialog. Добавь
-репозиторий через **Customize → Plugins → Personal plugins → + → Add
-marketplace**, затем используй **Code → + → Plugins → Add plugin**.
+Зарегистрируй хуки из рабочей копии репозитория:
 
-### Plugin установлен в Chat, но ничего не изменилось
+```bash
+./install.sh --target claude
+```
 
-Chat не исполняет `SessionStart`. Выбери skill **load-context** или попроси
-Claude загрузить Choirboy context.
+В Windows:
 
-### Cowork видит plugin, но маркера нет
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 --target claude
+```
 
-Запусти **load-context**. Исполнение hook в текущих сборках Cowork не
-детерминировано; skill — поддерживаемый fallback.
+Начни новую сессию. Если рабочая копия перемещена, повтори установку из нового
+каталога. Используй `--settings` или `--project`, если сессия читает другой
+файл настроек; см. [Установщик](installer.md).
 
-### Ошибка hook в Windows
+### Плагин установлен в Chat, но ничего не изменилось
 
-Плагин передаёт `${CLAUDE_PLUGIN_ROOT}` отдельным аргументом через
-exec-form, но автоматической доставке всё ещё нужен `bash` в `PATH`. Установи Git
-for Windows или используй skill. Сам skill не зависит от Bash, jq, Python или
-Node.
+Chat не исполняет `SessionStart`. Выбери навык **load-context** или попроси
+Claude загрузить контекст Choirboy.
+
+### Cowork видит плагин, но маркера нет
+
+Запусти **load-context**. Исполнение хука в текущих сборках Cowork не
+детерминировано; навык — поддерживаемый резервный вариант.
+
+### Ошибка хука в Windows
+
+Ручная установка использует PowerShell-хуки и требует `pwsh`. Пользовательский
+плагин для Chat/Cowork использует Bash-хуки: `${CLAUDE_PLUGIN_ROOT}` передаётся
+отдельным аргументом, но автоматической доставке нужен `bash` в `PATH`.
+Установи Git for Windows или используй навык. Сам навык не зависит от Bash,
+jq, Python или Node.
 
 ### `pwsh` не распознано в Windows
 
 Старая команда `pwsh -NoProfile -File .\install.ps1` требует заранее
-установленный PowerShell 7. Запускай вместо неё
+установленного PowerShell 7. Запускай вместо неё
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1`: она
 работает в Windows PowerShell 5.1 и сама ставит PowerShell 7. Если после
 установки хуки сообщают, что `pwsh` не найден, перезапусти терминал и
 приложение агента, чтобы они подхватили новый `PATH`.
 
-### Hook запускается дважды
-
-Одновременно включены marketplace plugin и `./install.sh --target claude`.
-Удали один путь. Ручной installer предупреждает, если видит marketplace entry.
-
 ### Cloud, SSH или WSL
 
-Cloud требует `extraKnownMarketplaces` и `enabledPlugins` в проектном
-`.claude/settings.json`:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "choirboy-prompt": {
-      "source": {
-        "source": "github",
-        "repo": "howdeploy/choirboy-prompt"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "choirboy-prompt@choirboy-prompt": true
-  }
-}
-```
-
-Claude всё равно запросит доверие к marketplace/plugin. SSH сейчас может не
-синхронизировать `hooks/` — используй skill. Desktop WSL plugins недоступны.
+Держи рабочую копию в среде, где реально исполняется Claude Code, и регистрируй
+хуки там. Настройки и пути локального хоста не настраивают отдельную удалённую
+среду. В WSL запускай `./install.sh --target claude` из Linux-копии
+репозитория. Если среда не исполняет хуки, попроси агента прочитать
+`skills/load-context/SKILL.md` из этой рабочей копии.
 
 ## Проверки для мейнтейнера
 
@@ -102,5 +96,6 @@ bash scripts/test.sh
 python3 scripts/package-plugin.py
 ```
 
-Сьют проверяет manifests, актуальность skill, JSON hook, встроенный Bash encoder,
-идемпотентность и откат installer, диагностику и содержимое ZIP.
+Набор тестов проверяет манифесты, актуальность навыка, JSON хука, встроенный
+Bash-кодировщик без внешних зависимостей, идемпотентность и откат установщика,
+диагностику и содержимое ZIP.

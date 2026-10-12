@@ -492,8 +492,7 @@ elif not isinstance(entries, list):
 
 # A settings hook entry belongs to us if it runs the selected managed script,
 # regardless of the absolute path (the plugin folder may move). This keeps the
-# manual installer idempotent across working-copy moves. Marketplace hooks are
-# resolved from the plugin cache and do not appear in this settings array.
+# manual installer idempotent across working-copy moves.
 def is_ours(entry):
     if not isinstance(entry, dict):
         return False
@@ -919,9 +918,6 @@ do_claude() {
     [ "$status" = "changed" ] && echo "  Stop removed" || echo "  Stop was not registered"
   else
     echo "claude: installing SessionStart/Stop hooks into $file"
-    if grep -qF 'choirboy-prompt@choirboy-prompt' "$file" 2>/dev/null; then
-      echo "  warning: marketplace plugin appears enabled in $file; manual hooks would run twice" >&2
-    fi
     if ! status="$(json_hook "$file" bash install hooks.SessionStart "$HOOK_SCRIPT" 15 "" session-start.sh)"; then
       die "claude: refusing to edit invalid hook settings in $file"
     fi

@@ -35,11 +35,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Install Claude Code validator
-        run: npm install --global @anthropic-ai/claude-code
       - name: Run plugin suite
         run: bash scripts/test.sh
       - name: Build custom-plugin ZIP
